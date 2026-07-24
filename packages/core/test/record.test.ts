@@ -29,6 +29,7 @@ async function repository(appSource: string): Promise<string> {
       packages: {},
     }),
   );
+  await writeFile(join(directory, ".gitignore"), "node_modules/\n");
   await writeFile(join(directory, "app.mjs"), appSource);
   await writeFile(
     join(dependency, "package.json"),
@@ -37,7 +38,7 @@ async function repository(appSource: string): Promise<string> {
   await writeFile(join(dependency, "index.js"), "export const value = (input) => ({ input });");
   for (const args of [
     ["init", "-q"],
-    ["add", "package.json", "package-lock.json", "app.mjs"],
+    ["add", ".gitignore", "package.json", "package-lock.json", "app.mjs"],
     ["-c", "user.name=ProofTape", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "fixture"],
   ]) {
     const result = spawnSync("git", args, { cwd: directory, encoding: "utf8", windowsHide: true });
@@ -158,6 +159,25 @@ describe("recordRevision", () => {
       timeoutMilliseconds: 10_000,
       maxOutputBytes: 64 * 1024,
     })).rejects.toBeInstanceOf(UnsupportedCaptureError);
+  });
+
+  it("rejects untracked application inputs that are not part of the exact revision", async () => {
+    const directory = await repository([
+      'import { value } from "fixture";',
+      'value("tracked");',
+    ].join("\n"));
+    await writeFile(join(directory, "candidate-controlled.mjs"), "export default 'untracked';\n");
+
+    await expect(recordRevision({
+      cwd: directory,
+      dependency: "fixture",
+      command: [process.execPath, "app.mjs"],
+      hookUrl,
+      prooftapeVersion: "0.0.0",
+      redactLiterals: [],
+      timeoutMilliseconds: 10_000,
+      maxOutputBytes: 64 * 1024,
+    })).rejects.toThrow(/not clean/);
   });
 
   it("produces byte-identical evidence and zero differences across 20 repeated runs", async () => {

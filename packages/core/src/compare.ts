@@ -101,8 +101,8 @@ export async function compareRevisions(
   if (gitRoot.toLocaleLowerCase() !== cwd.toLocaleLowerCase()) {
     throw new HarnessError("compare must run at the Git repository root");
   }
-  if (git(cwd, ["status", "--porcelain", "--untracked-files=no"]) !== "") {
-    throw new HarnessError("tracked checkout files are not clean");
+  if (git(cwd, ["status", "--porcelain", "--untracked-files=all"]) !== "") {
+    throw new HarnessError("checkout files are not clean");
   }
   git(cwd, ["cat-file", "-e", `${options.baseRef}^{commit}`]);
   git(cwd, ["cat-file", "-e", `${options.candidateRef}^{commit}`]);

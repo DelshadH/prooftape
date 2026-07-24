@@ -220,8 +220,8 @@ export async function recordRevision(
   if (gitRoot.toLocaleLowerCase() !== cwd.toLocaleLowerCase()) {
     throw new UnsupportedCaptureError("record must run at the Git repository root");
   }
-  const beforeStatus = runGit(cwd, ["status", "--porcelain", "--untracked-files=no"]);
-  if (beforeStatus !== "") throw new HarnessError("tracked checkout files are not clean");
+  const beforeStatus = runGit(cwd, ["status", "--porcelain", "--untracked-files=all"]);
+  if (beforeStatus !== "") throw new HarnessError("checkout files are not clean");
   const commitSha = runGit(cwd, ["rev-parse", "HEAD"]);
   if (!/^[a-f0-9]{40}$/u.test(commitSha)) throw new HarnessError("Git did not return a full commit SHA");
   const lockfile = await lockfileEvidence(cwd);
@@ -298,8 +298,8 @@ export async function recordRevision(
     if (commandResult.status !== 0) {
       throw new HarnessError(`test command exited ${commandResult.status ?? "without a status"}`);
     }
-    const afterStatus = runGit(cwd, ["status", "--porcelain", "--untracked-files=no"]);
-    if (afterStatus !== "") throw new HarnessError("test command modified tracked checkout files");
+    const afterStatus = runGit(cwd, ["status", "--porcelain", "--untracked-files=all"]);
+    if (afterStatus !== "") throw new HarnessError("test command modified checkout files");
     const merged = await mergeRawDirectory(rawDirectory, sessionId, metadata);
     if (merged.capsule.calls.length === 0) {
       throw new UnsupportedCaptureError("test command made no supported calls to the dependency");

@@ -92,9 +92,10 @@ try {
       join(repository, fixture.app),
       await readFile(join(fixtureRoot, fixture.app)),
     );
+    await writeFile(join(repository, ".gitignore"), "node_modules/\nrepro/\n");
     await installRevision(fixtureRoot, "base", repository);
     git(repository, ["init", "-q", "--initial-branch=main"]);
-    git(repository, ["add", fixture.app, "package.json", "package-lock.json"]);
+    git(repository, ["add", ".gitignore", fixture.app, "package.json", "package-lock.json"]);
     git(repository, [
       "-c",
       "user.name=ProofTape",
