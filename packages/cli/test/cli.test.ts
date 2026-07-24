@@ -168,4 +168,41 @@ describe("runCli", () => {
     ], { cwd, ...escapedOutput.io })).toBe(4);
     expect(escapedOutput.read().stderr).toContain("escapes the repository");
   });
+
+  it("maps ambiguous capture to exit 3 and explicit unsupported capture to exit 4", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "prooftape-cli-"));
+    const base = capsule("same", "a");
+    const duplicate = { ...base.calls[0]!, callId: "p1:2", sequence: 2 };
+    await writeFile(
+      join(cwd, "ambiguous-base.ptape"),
+      JSON.stringify({ ...base, calls: [...base.calls, duplicate] }),
+    );
+    await writeFile(join(cwd, "candidate.ptape"), JSON.stringify(base));
+    const ambiguous = output();
+    expect(await runCli([
+      "diff",
+      "--baseline",
+      "ambiguous-base.ptape",
+      "--candidate",
+      "candidate.ptape",
+    ], { cwd, ...ambiguous.io })).toBe(3);
+    expect(ambiguous.read().stderr).toContain("Harness failure");
+
+    await writeFile(
+      join(cwd, "unsupported-base.ptape"),
+      JSON.stringify({
+        ...base,
+        issues: [{ code: "PT_UNSUPPORTED_DYNAMIC_IMPORT", message: "unsupported" }],
+      }),
+    );
+    const unsupported = output();
+    expect(await runCli([
+      "diff",
+      "--baseline",
+      "unsupported-base.ptape",
+      "--candidate",
+      "candidate.ptape",
+    ], { cwd, ...unsupported.io })).toBe(4);
+    expect(unsupported.read().stderr).toContain("Unsupported or invalid input");
+  });
 });
