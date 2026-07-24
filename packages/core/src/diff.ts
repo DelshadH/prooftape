@@ -75,3 +75,110 @@ function deduplicate(diffs: readonly BehaviorDiffV1[]): readonly BehaviorDiffV1[
     return true;
   });
 }
+
+interface IndexedObservation {
+  readonly observation: CallObservationV1;
+  readonly index: number;
+}
+
+function groupCalls(
+  calls: readonly CallObservationV1[],
+): ReadonlyMap<string, readonly IndexedObservation[]> {
+  const groups = new Map<string, IndexedObservation[]>();
+  calls.forEach((observation, index) => {
+    const key = observationMatchKey(observation);
+    const group = groups.get(key) ?? [];
+    group.push({ observation, index });
+    groups.set(key, group);
+  });
+  return groups;
+}
+
+export function diffCalls(
+  baseCalls: readonly CallObservationV1[],
+  candidateCalls: readonly CallObservationV1[],
+): readonly BehaviorDiffV1[] {
+  const baseGroups = groupCalls(baseCalls);
+  const candidateGroups = groupCalls(candidateCalls);
+  const keys = [...new Set([...baseGroups.keys(), ...candidateGroups.keys()])].sort();
+  const matchedDiffs: BehaviorDiffV1[] = [];
+  const added: BehaviorDiffV1[] = [];
+  const removed: BehaviorDiffV1[] = [];
+  const ambiguous: BehaviorDiffV1[] = [];
+  const baseOrder: string[] = [];
+  const candidateOrder: Array<{ id: string; index: number }> = [];
+
+  for (const key of keys) {
+    const baseGroup = baseGroups.get(key) ?? [];
+    const candidateGroup = candidateGroups.get(key) ?? [];
+    if (
+      baseGroup.length !== candidateGroup.length
+      && Math.max(baseGroup.length, candidateGroup.length) > 1
+    ) {
+      ambiguous.push({
+        schemaVersion: "1",
+        kind: "ambiguous",
+        blocking: true,
+        matchKey: key,
+        ...(baseGroup[0] ? { base: baseGroup[0].observation } : {}),
+        ...(candidateGroup[0] ? { candidate: candidateGroup[0].observation } : {}),
+        summary: `${baseGroup[0]?.observation.exportPath ?? candidateGroup[0]?.observation.exportPath ?? "call"} has ambiguous repeated-call alignment`,
+      });
+      continue;
+    }
+
+    const matchedCount = Math.min(baseGroup.length, candidateGroup.length);
+    for (let index = 0; index < matchedCount; index += 1) {
+      const baseItem = baseGroup[index];
+      const candidateItem = candidateGroup[index];
+      if (!baseItem || !candidateItem) continue;
+      const occurrenceId = `${key}#${index}`;
+      baseOrder.push(occurrenceId);
+      candidateOrder.push({ id: occurrenceId, index: candidateItem.index });
+      matchedDiffs.push(...diffMatchedCall(baseItem.observation, candidateItem.observation));
+    }
+    for (const item of candidateGroup.slice(matchedCount)) {
+      added.push({
+        schemaVersion: "1",
+        kind: "added-call",
+        blocking: true,
+        matchKey: key,
+        candidate: item.observation,
+        summary: `${item.observation.exportPath} is a new observed call`,
+      });
+    }
+    for (const item of baseGroup.slice(matchedCount)) {
+      removed.push({
+        schemaVersion: "1",
+        kind: "removed-call",
+        blocking: true,
+        matchKey: key,
+        base: item.observation,
+        summary: `${item.observation.exportPath} is no longer observed`,
+      });
+    }
+  }
+
+  const candidateOrderedIds = candidateOrder
+    .sort((left, right) => left.index - right.index)
+    .map((item) => item.id);
+  const sequenceChanged = baseOrder.length > 1
+    && baseOrder.some((id, index) => candidateOrderedIds[index] !== id);
+  const sequenceDiff: readonly BehaviorDiffV1[] = sequenceChanged
+    ? [{
+      schemaVersion: "1",
+      kind: "changed-sequence",
+      blocking: true,
+      matchKey: sha256(baseOrder.join("\n")),
+      summary: "relative order of matching observed calls changed",
+    }]
+    : [];
+
+  return [
+    ...ambiguous,
+    ...matchedDiffs,
+    ...sequenceDiff,
+    ...added,
+    ...removed,
+  ];
+}

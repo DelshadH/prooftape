@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@prooftape/core": "0.0.0",
+    "@prooftape/hook": "0.0.0",
     "@prooftape/schema": "0.0.0"
   },
   "scripts": {
