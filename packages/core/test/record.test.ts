@@ -96,6 +96,32 @@ describe("recordRevision", () => {
     expect(JSON.stringify(result.capsule)).not.toContain(canary);
   });
 
+  it("does not expose unrelated runner environment variables to the test command", async () => {
+    const canary = "pt-runner-secret-canary";
+    const directory = await repository([
+      'import { value } from "fixture";',
+      'value(process.env.PROOFTAPE_TEST_SECRET_CANARY ?? "not-present");',
+    ].join("\n"));
+    process.env.PROOFTAPE_TEST_SECRET_CANARY = canary;
+    try {
+      const result = await recordRevision({
+        cwd: directory,
+        dependency: "fixture",
+        command: [process.execPath, "app.mjs"],
+        hookUrl,
+        prooftapeVersion: "0.0.0",
+        redactLiterals: [],
+        timeoutMilliseconds: 10_000,
+        maxOutputBytes: 64 * 1024,
+      });
+
+      expect(JSON.stringify(result.capsule)).not.toContain(canary);
+      expect(result.capsule.calls[0]?.argsBefore).toEqual(["not-present"]);
+    } finally {
+      delete process.env.PROOFTAPE_TEST_SECRET_CANARY;
+    }
+  });
+
   it("classifies failed, timed out, and unobserved commands", async () => {
     const failed = await repository("process.exitCode = 7;");
     await expect(recordRevision({

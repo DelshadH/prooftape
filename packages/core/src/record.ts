@@ -43,6 +43,47 @@ export class UnsupportedCaptureError extends Error {
   }
 }
 
+const COMMAND_ENVIRONMENT_ALLOWLIST = new Set([
+  "ci",
+  "comspec",
+  "force_color",
+  "lang",
+  "language",
+  "lc_all",
+  "node_no_warnings",
+  "no_color",
+  "path",
+  "pathext",
+  "systemroot",
+  "temp",
+  "tmp",
+  "tmpdir",
+  "tz",
+  "windir",
+]);
+
+function commandEnvironment(
+  nodeOptions: string,
+  hookConfig: Readonly<Record<string, unknown>>,
+): NodeJS.ProcessEnv {
+  const environment: NodeJS.ProcessEnv = {};
+  for (const [name, value] of Object.entries(process.env)) {
+    if (
+      value !== undefined
+      && Buffer.byteLength(value, "utf8") <= 32 * 1024
+      && (
+        COMMAND_ENVIRONMENT_ALLOWLIST.has(name.toLocaleLowerCase())
+        || name.toLocaleLowerCase().startsWith("lc_")
+      )
+    ) {
+      environment[name] = value;
+    }
+  }
+  environment.NODE_OPTIONS = nodeOptions;
+  environment.PROOFTAPE_CONFIG = JSON.stringify(hookConfig);
+  return environment;
+}
+
 function runGit(cwd: string, args: readonly string[]): string {
   const result = spawnSync("git", args, {
     cwd,
@@ -240,11 +281,7 @@ export async function recordRevision(
   try {
     const commandResult = spawnSync(options.command[0]!, options.command.slice(1), {
       cwd,
-      env: {
-        ...process.env,
-        NODE_OPTIONS: nodeOptions,
-        PROOFTAPE_CONFIG: JSON.stringify(hookConfig),
-      },
+      env: commandEnvironment(nodeOptions, hookConfig),
       encoding: "buffer",
       timeout: options.timeoutMilliseconds,
       maxBuffer: options.maxOutputBytes,
