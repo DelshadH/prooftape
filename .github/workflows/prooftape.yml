@@ -1,0 +1,213 @@
+name: ProofTape isolated comparison
+
+on:
+  workflow_call:
+    inputs:
+      base_ref:
+        description: Full lowercase Git SHA for the protected baseline
+        required: true
+        type: string
+      candidate_ref:
+        description: Full lowercase Git SHA for the candidate
+        required: true
+        type: string
+      dependency:
+        description: Exact npm package name to observe
+        required: true
+        type: string
+      command:
+        description: Direct test command; shell syntax is rejected
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      base_ref:
+        description: Full lowercase Git SHA for the protected baseline
+        required: true
+        type: string
+      candidate_ref:
+        description: Full lowercase Git SHA for the candidate
+        required: true
+        type: string
+      dependency:
+        description: Exact npm package name to observe
+        required: true
+        type: string
+      command:
+        description: Direct test command; shell syntax is rejected
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  record_base:
+    name: Record protected base
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      capsule_sha256: ${{ steps.record.outputs.capsule-sha256 }}
+    steps:
+      - name: Check out pinned ProofTape
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
+        with:
+          repository: DelshadH/prooftape
+          ref: a2348ef6671991fe227d4c4fdb0c5016e2c50c1c
+          path: tool
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+      - name: Build the pinned recorder
+        working-directory: tool
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run build
+      - name: Validate bounded inputs
+        env:
+          PROOFTAPE_BASE_REF: ${{ inputs.base_ref }}
+          PROOFTAPE_CANDIDATE_REF: ${{ inputs.candidate_ref }}
+          PROOFTAPE_DEPENDENCY: ${{ inputs.dependency }}
+          PROOFTAPE_COMMAND: ${{ inputs.command }}
+        run: node tool/scripts/workflow-inputs.mjs
+      - name: Check out exact base
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
+        with:
+          ref: ${{ inputs.base_ref }}
+          path: target
+          persist-credentials: false
+      - name: Install exact base lockfile
+        working-directory: target
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Record base capsule
+        id: record
+        env:
+          PROOFTAPE_ACTION_COMMAND: ${{ inputs.command }}
+          PROOFTAPE_ACTION_DEPENDENCY: ${{ inputs.dependency }}
+          PROOFTAPE_ACTION_OUTPUT: capsule.ptape
+          PROOFTAPE_ACTION_TIMEOUT_MS: "120000"
+          PROOFTAPE_ACTION_WORKING_DIRECTORY: target
+        run: node tool/scripts/action-record.mjs
+      - name: Upload base capsule
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: prooftape-base-capsule
+          path: target/capsule.ptape
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+  record_candidate:
+    name: Record untrusted candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      capsule_sha256: ${{ steps.record.outputs.capsule-sha256 }}
+    steps:
+      - name: Check out pinned ProofTape
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
+        with:
+          repository: DelshadH/prooftape
+          ref: a2348ef6671991fe227d4c4fdb0c5016e2c50c1c
+          path: tool
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+      - name: Build the pinned recorder
+        working-directory: tool
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run build
+      - name: Validate bounded inputs
+        env:
+          PROOFTAPE_BASE_REF: ${{ inputs.base_ref }}
+          PROOFTAPE_CANDIDATE_REF: ${{ inputs.candidate_ref }}
+          PROOFTAPE_DEPENDENCY: ${{ inputs.dependency }}
+          PROOFTAPE_COMMAND: ${{ inputs.command }}
+        run: node tool/scripts/workflow-inputs.mjs
+      - name: Check out exact candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
+        with:
+          ref: ${{ inputs.candidate_ref }}
+          path: target
+          persist-credentials: false
+      - name: Install exact candidate lockfile
+        working-directory: target
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Record candidate capsule
+        id: record
+        env:
+          PROOFTAPE_ACTION_COMMAND: ${{ inputs.command }}
+          PROOFTAPE_ACTION_DEPENDENCY: ${{ inputs.dependency }}
+          PROOFTAPE_ACTION_OUTPUT: capsule.ptape
+          PROOFTAPE_ACTION_TIMEOUT_MS: "120000"
+          PROOFTAPE_ACTION_WORKING_DIRECTORY: target
+        run: node tool/scripts/action-record.mjs
+      - name: Upload candidate capsule
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: prooftape-candidate-capsule
+          path: target/capsule.ptape
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+  verify:
+    name: Verify immutable capsules
+    needs: [record_base, record_candidate]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out pinned ProofTape
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
+        with:
+          repository: DelshadH/prooftape
+          ref: a2348ef6671991fe227d4c4fdb0c5016e2c50c1c
+          path: tool
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+      - name: Build the pinned verifier
+        working-directory: tool
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run build
+      - name: Download base capsule
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: prooftape-base-capsule
+          path: verify/base
+      - name: Download candidate capsule
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: prooftape-candidate-capsule
+          path: verify/candidate
+      - name: Validate and compare
+        env:
+          PROOFTAPE_BASE_CAPSULE_SHA256: ${{ needs.record_base.outputs.capsule_sha256 }}
+          PROOFTAPE_CANDIDATE_CAPSULE_SHA256: ${{ needs.record_candidate.outputs.capsule_sha256 }}
+          PROOFTAPE_VERIFY_DIRECTORY: ${{ github.workspace }}/verify
+        run: node tool/scripts/workflow-verify.mjs
+      - name: Upload report and reproduction
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: prooftape-report
+          path: |
+            verify/report.json
+            verify/repro
+            verify/exit-code.txt
+          if-no-files-found: warn
+          retention-days: 7
+          compression-level: 0
+      - name: Enforce ProofTape exit contract
+        if: always()
+        env:
+          PROOFTAPE_VERIFY_DIRECTORY: ${{ github.workspace }}/verify
+        run: node tool/scripts/workflow-conclude.mjs
