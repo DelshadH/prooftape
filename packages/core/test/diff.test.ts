@@ -19,7 +19,9 @@ const base: CallObservationV1 = {
 describe("diffMatchedCall", () => {
   it("reports a changed return", () => {
     const candidate = { ...base, value: "x" } satisfies CallObservationV1;
-    expect(diffMatchedCall(base, candidate).map((item) => item.kind)).toContain("changed-return");
+    const differences = diffMatchedCall(base, candidate);
+    expect(differences.map((item) => item.kind)).toContain("changed-return");
+    expect(differences[0]?.summary).toBe("parse changed return value");
   });
 
   it("reports no change for equal observations", () => {

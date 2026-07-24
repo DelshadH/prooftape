@@ -35,9 +35,13 @@ export function parseCommand(command: string): readonly string[] {
       } else if (character === "\\" && quote === '"') {
         const next = command[index + 1];
         if (next === undefined) throw new CommandSyntaxError("command ends with an escape");
-        current += next;
+        if (next === '"' || next === "\\") {
+          current += next;
+          index += 1;
+        } else {
+          current += character;
+        }
         tokenStarted = true;
-        index += 1;
       } else {
         current += character;
         tokenStarted = true;

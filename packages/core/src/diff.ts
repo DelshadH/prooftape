@@ -26,16 +26,19 @@ export function diffMatchedCall(
   const diffs: BehaviorDiffV1[] = [];
 
   if (base.outcome !== candidate.outcome || optionalComparable(base, "value") !== optionalComparable(candidate, "value")) {
+    const kind = base.outcome === "throw" || base.outcome === "reject" || candidate.outcome === "throw" || candidate.outcome === "reject"
+      ? "changed-error"
+      : "changed-return";
     diffs.push({
       schemaVersion: "1",
-      kind: base.outcome === "throw" || base.outcome === "reject" || candidate.outcome === "throw" || candidate.outcome === "reject"
-        ? "changed-error"
-        : "changed-return",
+      kind,
       blocking: true,
       matchKey,
       base,
       candidate,
-      summary: `${base.exportPath} changed outcome`,
+      summary: base.outcome !== candidate.outcome
+        ? `${base.exportPath} changed from ${base.outcome} to ${candidate.outcome}`
+        : `${base.exportPath} changed ${base.outcome === "resolve" ? "resolved" : "return"} value`,
     });
   }
 

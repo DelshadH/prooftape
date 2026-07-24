@@ -20,6 +20,13 @@ describe("parseCommand", () => {
     ]);
   });
 
+  it("preserves Windows path separators inside double quotes", () => {
+    expect(parseCommand('"C:\\Program Files\\node.exe" app.mjs')).toEqual([
+      "C:\\Program Files\\node.exe",
+      "app.mjs",
+    ]);
+  });
+
   it.each([
     "npm test && publish",
     "npm test | upload",

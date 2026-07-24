@@ -1,10 +1,25 @@
 {
   "name": "@prooftape/hook",
   "version": "0.0.0",
-  "private": true,
+  "description": "Node module interception hook for ProofTape",
   "type": "module",
   "exports": "./dist/register.js",
   "types": "./dist/register.d.ts",
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22.15.0"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DelshadH/prooftape.git",
+    "directory": "packages/hook"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
     "@prooftape/core": "0.0.0",
     "@prooftape/schema": "0.0.0",

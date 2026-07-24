@@ -1,0 +1,124 @@
+import { spawnSync } from "node:child_process";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  writeFile,
+} from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+
+function run(executable, args, options = {}) {
+  const result = spawnSync(executable, args, {
+    encoding: "utf8",
+    timeout: 120_000,
+    maxBuffer: 2 * 1024 * 1024,
+    windowsHide: true,
+    shell: false,
+    ...options,
+  });
+  if (result.error || result.status !== 0) {
+    throw new Error(`${executable} ${args[0] ?? ""} failed: ${result.stderr.trim()}`);
+  }
+  return result.stdout.trim();
+}
+
+const repository = resolve(import.meta.dirname, "..");
+const temporary = await mkdtemp(join(tmpdir(), "prooftape-package-smoke-"));
+
+try {
+  run("npm", ["run", "build"], { cwd: repository });
+  const tarballs = [];
+  for (const workspace of [
+    "@prooftape/schema",
+    "@prooftape/core",
+    "@prooftape/hook",
+    "prooftape",
+  ]) {
+    const output = run(
+      "npm",
+      ["pack", "--json", "--workspace", workspace, "--pack-destination", temporary],
+      { cwd: repository },
+    );
+    const result = JSON.parse(output);
+    const filename = result[0]?.filename;
+    if (typeof filename !== "string") throw new Error(`npm pack returned no file for ${workspace}`);
+    tarballs.push(join(temporary, filename));
+  }
+
+  const install = join(temporary, "install");
+  await mkdir(install);
+  await writeFile(
+    join(install, "package.json"),
+    JSON.stringify({ name: "prooftape-package-smoke", private: true }),
+  );
+  run(
+    "npm",
+    ["install", "--ignore-scripts", "--no-audit", "--no-fund", ...tarballs],
+    { cwd: install },
+  );
+  const cli = join(install, "node_modules", "prooftape", "dist", "cli.js");
+  const help = run(process.execPath, [cli, "--help"], { cwd: install });
+  if (!help.includes("prooftape compare")) throw new Error("packed CLI help smoke failed");
+
+  const fixture = join(temporary, "fixture");
+  const dependency = join(fixture, "node_modules", "fixture");
+  await mkdir(dependency, { recursive: true });
+  await writeFile(
+    join(fixture, "package.json"),
+    JSON.stringify({ name: "packed-cli-fixture", private: true, type: "module" }),
+  );
+  await writeFile(
+    join(fixture, "package-lock.json"),
+    JSON.stringify({
+      name: "packed-cli-fixture",
+      lockfileVersion: 3,
+      requires: true,
+      packages: {},
+    }),
+  );
+  await writeFile(
+    join(fixture, ".gitignore"),
+    "node_modules/\n*.ptape\n",
+  );
+  await writeFile(
+    join(fixture, "app.mjs"),
+    'import { value } from "fixture"; if (value(2) !== 4) process.exitCode = 9;\n',
+  );
+  await writeFile(
+    join(dependency, "package.json"),
+    JSON.stringify({ name: "fixture", version: "1.0.0", type: "module", exports: "./index.js" }),
+  );
+  await writeFile(join(dependency, "index.js"), "export const value = (input) => input * 2;\n");
+  run("git", ["init", "-q"], { cwd: fixture });
+  run("git", ["add", "."], { cwd: fixture });
+  run("git", [
+    "-c",
+    "user.name=ProofTape",
+    "-c",
+    "user.email=fixture@example.invalid",
+    "commit",
+    "-qm",
+    "fixture",
+  ], { cwd: fixture });
+
+  const quotedNode = `"${process.execPath.replaceAll('"', '\\"')}" app.mjs`;
+  run(process.execPath, [
+    cli,
+    "record",
+    "--dependency",
+    "fixture",
+    "--command",
+    quotedNode,
+    "--out",
+    "smoke.ptape",
+  ], { cwd: fixture });
+  const capsule = JSON.parse(await readFile(join(fixture, "smoke.ptape"), "utf8"));
+  if (capsule.kind !== "prooftape-capsule" || capsule.calls?.length !== 1) {
+    throw new Error("packed CLI record smoke produced an invalid capsule");
+  }
+  process.stdout.write("Packed CLI help and record smoke passed.\n");
+} finally {
+  await rm(temporary, { recursive: true, force: true });
+}

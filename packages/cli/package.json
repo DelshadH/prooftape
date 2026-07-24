@@ -1,10 +1,22 @@
 {
   "name": "prooftape",
   "version": "0.0.0",
-  "private": true,
+  "description": "Compare observed npm dependency behavior across exact Git revisions",
   "type": "module",
   "bin": {
     "prooftape": "./dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22.15.0"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DelshadH/prooftape.git",
+    "directory": "packages/cli"
   },
   "dependencies": {
     "@prooftape/core": "0.0.0",
