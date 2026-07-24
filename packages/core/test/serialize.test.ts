@@ -77,4 +77,21 @@ describe("serializeValue", () => {
       "max-string-bytes",
     ]);
   });
+
+  it("turns hostile proxy traps into explicit unsupported evidence", () => {
+    const hostile = new Proxy({}, {
+      getPrototypeOf() {
+        throw new Error("candidate trap ran");
+      },
+    });
+
+    expect(serializeValue(hostile)).toEqual({
+      value: { $prooftape: "unsupported", reason: "serialization-trap" },
+      unsupported: [{
+        path: "/",
+        reason: "serialization-trap",
+        type: "unknown",
+      }],
+    });
+  });
 });

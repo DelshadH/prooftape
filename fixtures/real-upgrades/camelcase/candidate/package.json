@@ -1,0 +1,9 @@
+{
+  "name": "prooftape-real-camelcase",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "camelcase": "7.0.1"
+  }
+}

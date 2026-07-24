@@ -92,13 +92,18 @@ function run(app: string, directory: string, config?: Record<string, unknown>): 
   const register = pathToFileURL(resolve("packages/hook/dist/register.js")).href;
   const result = spawnSync(
     process.execPath,
-    config ? ["--import", register, app] : [app],
+    [app],
     {
       cwd: directory,
       encoding: "utf8",
       env: {
         ...process.env,
-        ...(config ? { PROOFTAPE_CONFIG: JSON.stringify(config) } : {}),
+        ...(config
+          ? {
+              NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ""} --import=${register}`.trim(),
+              PROOFTAPE_CONFIG: JSON.stringify(config),
+            }
+          : {}),
       },
       timeout: 10_000,
       windowsHide: true,
@@ -199,5 +204,84 @@ describe("Node module interception", () => {
     const records = await observations(fixture.output);
     expect(records.filter((record) => record.kind === "call")).toHaveLength(2);
     expect(records.filter((record) => record.kind === "issue")).toEqual([]);
+  });
+
+  it("records inherited child-process calls without collisions or silent loss", async () => {
+    const fixture = await writeFixture("esm");
+    const child = join(fixture.directory, "child.mjs");
+    await writeFile(
+      child,
+      [
+        'import { add } from "fixture";',
+        "if (add(2, 4) !== 6) process.exitCode = 9;",
+      ].join("\n"),
+    );
+    await writeFile(
+      fixture.app,
+      [
+        'import { spawnSync } from "node:child_process";',
+        "for (let index = 0; index < 2; index += 1) {",
+        "  const child = spawnSync(process.execPath, ['./child.mjs'], { stdio: 'inherit' });",
+        "  if (child.status !== 0) process.exit(child.status ?? 8);",
+        "}",
+      ].join("\n"),
+    );
+
+    const instrumented = run(fixture.app, fixture.directory, {
+      schemaVersion: "1",
+      dependency: "fixture",
+      outputDirectory: fixture.output,
+      sessionId: "children012345",
+      limits: {
+        maxEvents: 100,
+        maxEventBytes: 65_536,
+        maxDepth: 12,
+        maxCollectionEntries: 100,
+        maxStringBytes: 16_384,
+      },
+      redactLiterals: [],
+    });
+
+    expect(instrumented.status, instrumented.stderr).toBe(0);
+    const records = await observations(fixture.output);
+    expect(records.filter((record) => record.kind === "call")).toHaveLength(2);
+    expect(records.filter((record) => record.kind === "issue")).toEqual([]);
+  });
+
+  it("records unsupported dynamic imports explicitly and leaves execution unchanged", async () => {
+    const fixture = await writeFixture("esm");
+    await writeFile(
+      fixture.app,
+      [
+        'const dependency = await import("fixture");',
+        "process.stdout.write(String(dependency.add(2, 3)));",
+      ].join("\n"),
+    );
+
+    const plain = run(fixture.app, fixture.directory);
+    const instrumented = run(fixture.app, fixture.directory, {
+      schemaVersion: "1",
+      dependency: "fixture",
+      outputDirectory: fixture.output,
+      sessionId: "unsupported01",
+      limits: {
+        maxEvents: 100,
+        maxEventBytes: 65_536,
+        maxDepth: 12,
+        maxCollectionEntries: 100,
+        maxStringBytes: 16_384,
+      },
+      redactLiterals: [],
+    });
+
+    expect(instrumented.status, instrumented.stderr).toBe(0);
+    expect(instrumented.stdout).toBe(plain.stdout);
+    const records = await observations(fixture.output);
+    expect(records.filter((record) => record.kind === "call")).toEqual([]);
+    expect(records.filter((record) => record.kind === "issue")).toEqual([
+      expect.objectContaining({
+        issue: expect.objectContaining({ code: "PT_UNSUPPORTED_DYNAMIC_IMPORT" }),
+      }),
+    ]);
   });
 });

@@ -40,13 +40,17 @@ const SENSITIVE_KEY = /(?:authorization|cookie|credential|pass(?:word)?|secret|t
 const REDACTED = "[REDACTED]";
 
 function typeName(value: unknown): string {
-  if (value === null) return "null";
-  if (Array.isArray(value)) return "array";
-  if (value instanceof Date) return "date";
-  if (value instanceof Error) return "error";
-  return typeof value === "object"
-    ? Object.getPrototypeOf(value)?.constructor?.name ?? "object"
-    : typeof value;
+  try {
+    if (value === null) return "null";
+    if (Array.isArray(value)) return "array";
+    if (value instanceof Date) return "date";
+    if (value instanceof Error) return "error";
+    return typeof value === "object"
+      ? Object.getPrototypeOf(value)?.constructor?.name ?? "object"
+      : typeof value;
+  } catch {
+    return "unknown";
+  }
 }
 
 function pointer(parent: string, key: string | number): string {
@@ -109,75 +113,80 @@ export function serializeValue(value: unknown, options: SerializeOptions = {}): 
       return unsupportedValue(unsupported, path, "unsupported-type", current);
     }
 
-    if (current instanceof Date) {
-      return Number.isNaN(current.getTime())
-        ? unsupportedValue(unsupported, path, "invalid-date", current)
-        : { $prooftape: "date", value: current.toISOString() };
-    }
-
-    if (ancestors.has(current)) {
-      return unsupportedValue(unsupported, path, "cycle", current);
-    }
-
-    if (current instanceof Error) {
-      const errorValue: Record<string, JsonValue> = {
-        $prooftape: "error",
-        message: replaceLiterals(current.message, redactLiterals),
-        name: current.name,
-      };
-      const code = Object.getOwnPropertyDescriptor(current, "code");
-      if (code?.get || code?.set) {
-        errorValue.code = unsupportedValue(unsupported, pointer(path, "code"), "accessor-property", current);
-      } else if (code && "value" in code) {
-        errorValue.code = visit(code.value, pointer(path, "code"), depth + 1);
+    try {
+      if (current instanceof Date) {
+        return Number.isNaN(current.getTime())
+          ? unsupportedValue(unsupported, path, "invalid-date", current)
+          : { $prooftape: "date", value: current.toISOString() };
       }
-      return Object.fromEntries(
-        Object.entries(errorValue).sort(([left], [right]) => left.localeCompare(right)),
+
+      if (ancestors.has(current)) {
+        return unsupportedValue(unsupported, path, "cycle", current);
+      }
+
+      if (current instanceof Error) {
+        const errorValue: Record<string, JsonValue> = {
+          $prooftape: "error",
+          message: replaceLiterals(current.message, redactLiterals),
+          name: current.name,
+        };
+        const code = Object.getOwnPropertyDescriptor(current, "code");
+        if (code?.get || code?.set) {
+          errorValue.code = unsupportedValue(unsupported, pointer(path, "code"), "accessor-property", current);
+        } else if (code && "value" in code) {
+          errorValue.code = visit(code.value, pointer(path, "code"), depth + 1);
+        }
+        return Object.fromEntries(
+          Object.entries(errorValue).sort(([left], [right]) => left.localeCompare(right)),
+        );
+      }
+
+      const prototype = Object.getPrototypeOf(current);
+      if (!Array.isArray(current) && prototype !== Object.prototype && prototype !== null) {
+        return unsupportedValue(unsupported, path, "unsupported-prototype", current);
+      }
+
+      const symbols = Object.getOwnPropertySymbols(current).filter(
+        (symbol) => Object.getOwnPropertyDescriptor(current, symbol)?.enumerable,
       );
-    }
-
-    const prototype = Object.getPrototypeOf(current);
-    if (!Array.isArray(current) && prototype !== Object.prototype && prototype !== null) {
-      return unsupportedValue(unsupported, path, "unsupported-prototype", current);
-    }
-
-    const symbols = Object.getOwnPropertySymbols(current).filter(
-      (symbol) => Object.getOwnPropertyDescriptor(current, symbol)?.enumerable,
-    );
-    if (symbols.length > 0) {
-      unsupportedValue(unsupported, path, "symbol-key", current);
-    }
-
-    const keys = Object.keys(current);
-    if (keys.length > maxCollectionEntries) {
-      return unsupportedValue(unsupported, path, "max-collection-entries", current);
-    }
-
-    ancestors.add(current);
-    if (Array.isArray(current)) {
-      const result = current.map((child, index) => visit(child, pointer(path, index), depth + 1));
-      ancestors.delete(current);
-      return result;
-    }
-
-    const entries: Array<[string, JsonValue]> = [];
-    for (const key of keys) {
-      const childPath = pointer(path, key);
-      const descriptor = Object.getOwnPropertyDescriptor(current, key);
-      if (!descriptor || descriptor.get || descriptor.set) {
-        entries.push([
-          key,
-          unsupportedValue(unsupported, childPath, "accessor-property", current),
-        ]);
-      } else if (SENSITIVE_KEY.test(key)) {
-        entries.push([key, REDACTED]);
-      } else {
-        entries.push([key, visit(descriptor.value, childPath, depth + 1)]);
+      if (symbols.length > 0) {
+        unsupportedValue(unsupported, path, "symbol-key", current);
       }
+
+      const keys = Object.keys(current);
+      if (keys.length > maxCollectionEntries) {
+        return unsupportedValue(unsupported, path, "max-collection-entries", current);
+      }
+
+      ancestors.add(current);
+      if (Array.isArray(current)) {
+        const result = current.map((child, index) => visit(child, pointer(path, index), depth + 1));
+        ancestors.delete(current);
+        return result;
+      }
+
+      const entries: Array<[string, JsonValue]> = [];
+      for (const key of keys) {
+        const childPath = pointer(path, key);
+        const descriptor = Object.getOwnPropertyDescriptor(current, key);
+        if (!descriptor || descriptor.get || descriptor.set) {
+          entries.push([
+            key,
+            unsupportedValue(unsupported, childPath, "accessor-property", current),
+          ]);
+        } else if (SENSITIVE_KEY.test(key)) {
+          entries.push([key, REDACTED]);
+        } else {
+          entries.push([key, visit(descriptor.value, childPath, depth + 1)]);
+        }
+      }
+      ancestors.delete(current);
+      entries.sort(([left], [right]) => left.localeCompare(right));
+      return Object.fromEntries(entries);
+    } catch {
+      ancestors.delete(current);
+      return unsupportedValue(unsupported, path, "serialization-trap", current);
     }
-    ancestors.delete(current);
-    entries.sort(([left], [right]) => left.localeCompare(right));
-    return Object.fromEntries(entries);
   };
 
   return { value: visit(value, "", 0), unsupported };

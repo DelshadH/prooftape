@@ -137,4 +137,35 @@ describe("runCli", () => {
     expect(exitCode).toBe(4);
     expect(streams.read().stderr).not.toContain(" at ");
   });
+
+  it("rejects repository traversal for capsule inputs and report outputs", async () => {
+    const parent = await mkdtemp(join(tmpdir(), "prooftape-cli-parent-"));
+    const cwd = join(parent, "repo");
+    await import("node:fs/promises").then(({ mkdir }) => mkdir(cwd));
+    const unchanged = capsule("same", "a");
+    await writeFile(join(parent, "outside.ptape"), JSON.stringify(unchanged));
+    await writeFile(join(cwd, "inside.ptape"), JSON.stringify(unchanged));
+
+    const escapedInput = output();
+    expect(await runCli([
+      "diff",
+      "--baseline",
+      "../outside.ptape",
+      "--candidate",
+      "inside.ptape",
+    ], { cwd, ...escapedInput.io })).toBe(4);
+    expect(escapedInput.read().stderr).toContain("escapes the repository");
+
+    const escapedOutput = output();
+    expect(await runCli([
+      "diff",
+      "--baseline",
+      "inside.ptape",
+      "--candidate",
+      "inside.ptape",
+      "--report",
+      "../report.json",
+    ], { cwd, ...escapedOutput.io })).toBe(4);
+    expect(escapedOutput.read().stderr).toContain("escapes the repository");
+  });
 });

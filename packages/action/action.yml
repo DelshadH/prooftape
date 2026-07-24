@@ -1,18 +1,45 @@
-name: ProofTape
-description: >-
-  Pre-release placeholder. The released action will compare observed dependency
-  behavior without running pull-request code in a privileged workflow.
+name: ProofTape record
+description: Record one supported application-to-dependency runtime surface as a versioned capsule.
 inputs:
   dependency:
     description: Exact npm package name to observe
     required: true
   command:
-    description: Existing test command
+    description: Direct test command; shell syntax is rejected
     required: true
+  working-directory:
+    description: Repository-relative application directory
+    required: false
+    default: "."
+  output:
+    description: Application-directory-relative capsule path
+    required: false
+    default: ".prooftape/capsule.ptape"
+  timeout-ms:
+    description: Test timeout in milliseconds
+    required: false
+    default: "120000"
+outputs:
+  capsule-path:
+    description: Absolute path of the generated capsule
+    value: ${{ steps.record.outputs.capsule-path }}
+  capsule-sha256:
+    description: SHA-256 of the generated capsule bytes
+    value: ${{ steps.record.outputs.capsule-sha256 }}
 runs:
   using: composite
   steps:
-    - shell: bash
+    - id: record
+      shell: bash
+      env:
+        PROOFTAPE_ACTION_COMMAND: ${{ inputs.command }}
+        PROOFTAPE_ACTION_DEPENDENCY: ${{ inputs.dependency }}
+        PROOFTAPE_ACTION_OUTPUT: ${{ inputs.output }}
+        PROOFTAPE_ACTION_TIMEOUT_MS: ${{ inputs.timeout-ms }}
+        PROOFTAPE_ACTION_WORKING_DIRECTORY: ${{ inputs.working-directory }}
       run: |
-        echo "ProofTape Action is not available before the 0.1 release." >&2
-        exit 4
+        set -euo pipefail
+        cd "$GITHUB_ACTION_PATH/../.."
+        npm ci --ignore-scripts --no-audit --no-fund
+        npm run build
+        node scripts/action-record.mjs

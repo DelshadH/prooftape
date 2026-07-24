@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
-import { compareRevisions } from "../src/index.js";
+import { compareRevisions, HarnessError, sha256 } from "../src/index.js";
 
 function command(cwd: string, executable: string, args: readonly string[]): string {
   const result = spawnSync(executable, args, {
@@ -135,5 +135,84 @@ describe("compareRevisions", () => {
     expect(result.candidate.metadata.commitSha).toBe(fixture.candidate);
     expect(result.base.metadata.dependency.version).toBe("1.0.0");
     expect(result.candidate.metadata.dependency.version).toBe("2.0.0");
+  }, 60_000);
+
+  it("keeps recorded base evidence intact when candidate code targets the sibling worktree", async () => {
+    const fixture = await fixtureRepository();
+    await writeFile(
+      join(fixture.directory, "test.mjs"),
+      [
+        'import { writeFileSync } from "node:fs";',
+        'import { value } from "fixture";',
+        "const observed = value(2);",
+        'writeFileSync(new URL("../base/package-lock.json", import.meta.url), \'{"tampered":true}\');',
+        "if (typeof observed !== 'string') process.exitCode = 9;",
+      ].join("\n"),
+    );
+    command(fixture.directory, "git", ["add", "test.mjs"]);
+    command(fixture.directory, "git", [
+      "-c",
+      "user.name=ProofTape",
+      "-c",
+      "user.email=fixture@example.invalid",
+      "commit",
+      "-qm",
+      "candidate baseline attack",
+    ]);
+    const attackingCandidate = command(fixture.directory, "git", ["rev-parse", "HEAD"]);
+
+    const result = await compareRevisions({
+      cwd: fixture.directory,
+      baseRef: fixture.base,
+      candidateRef: attackingCandidate,
+      dependency: "fixture",
+      command: [process.execPath, "test.mjs"],
+      hookUrl: pathToFileURL(resolve("packages/hook/dist/register.js")).href,
+      prooftapeVersion: "0.0.0",
+      redactLiterals: [],
+      timeoutMilliseconds: 20_000,
+      maxOutputBytes: 64 * 1024,
+    });
+
+    expect(result.base.metadata.commitSha).toBe(fixture.base);
+    expect(result.base.metadata.lockfileSha256).not.toBe(sha256('{"tampered":true}'));
+    expect(result.base.calls[0]?.value).toBe("before");
+  }, 60_000);
+
+  it("fails closed when candidate code modifies its own tracked checkout", async () => {
+    const fixture = await fixtureRepository();
+    await writeFile(
+      join(fixture.directory, "test.mjs"),
+      [
+        'import { appendFileSync } from "node:fs";',
+        'import { value } from "fixture";',
+        "value(2);",
+        'appendFileSync(new URL("./test.mjs", import.meta.url), "\\n// candidate tamper");',
+      ].join("\n"),
+    );
+    command(fixture.directory, "git", ["add", "test.mjs"]);
+    command(fixture.directory, "git", [
+      "-c",
+      "user.name=ProofTape",
+      "-c",
+      "user.email=fixture@example.invalid",
+      "commit",
+      "-qm",
+      "candidate self attack",
+    ]);
+    const attackingCandidate = command(fixture.directory, "git", ["rev-parse", "HEAD"]);
+
+    await expect(compareRevisions({
+      cwd: fixture.directory,
+      baseRef: fixture.base,
+      candidateRef: attackingCandidate,
+      dependency: "fixture",
+      command: [process.execPath, "test.mjs"],
+      hookUrl: pathToFileURL(resolve("packages/hook/dist/register.js")).href,
+      prooftapeVersion: "0.0.0",
+      redactLiterals: [],
+      timeoutMilliseconds: 20_000,
+      maxOutputBytes: 64 * 1024,
+    })).rejects.toThrow(HarnessError);
   }, 60_000);
 });

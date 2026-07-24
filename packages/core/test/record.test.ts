@@ -5,6 +5,8 @@ import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
+  buildReport,
+  canonicalCapsule,
   HarnessError,
   UnsupportedCaptureError,
   recordRevision,
@@ -131,4 +133,33 @@ describe("recordRevision", () => {
       maxOutputBytes: 64 * 1024,
     })).rejects.toBeInstanceOf(UnsupportedCaptureError);
   });
+
+  it("produces byte-identical evidence and zero differences across 20 repeated runs", async () => {
+    const directory = await repository([
+      'import { value } from "fixture";',
+      'value("stable");',
+    ].join("\n"));
+    const options = {
+      cwd: directory,
+      dependency: "fixture",
+      command: [process.execPath, "app.mjs"],
+      hookUrl,
+      prooftapeVersion: "0.0.0",
+      redactLiterals: [],
+      timeoutMilliseconds: 10_000,
+      maxOutputBytes: 64 * 1024,
+    } as const;
+
+    const baseline = await recordRevision(options);
+    const canonical = canonicalCapsule(baseline.capsule);
+    for (let run = 2; run <= 20; run += 1) {
+      const candidate = await recordRevision(options);
+      expect(canonicalCapsule(candidate.capsule)).toBe(canonical);
+      expect(buildReport(baseline.capsule, candidate.capsule)).toMatchObject({
+        verdict: "no-blocking-differences-observed",
+        blockingDifferenceCount: 0,
+        differences: [],
+      });
+    }
+  }, 30_000);
 });

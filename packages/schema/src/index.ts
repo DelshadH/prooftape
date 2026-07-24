@@ -130,6 +130,11 @@ export const CAPSULE_LIMITS = Object.freeze({
   maxJsonEntries: 10_000,
 } as const);
 
+export const REPORT_LIMITS = Object.freeze({
+  maxBytes: 20 * 1024 * 1024,
+  maxDifferences: 20_000,
+} as const);
+
 export class SchemaValidationError extends Error {
   public constructor(message: string) {
     super(message);
@@ -479,6 +484,192 @@ export function parseCapsule(input: string | Uint8Array): CapsuleV1 {
     calls: object.calls.map((call, index) => parseCall(call, `/calls/${index}`)),
     issues: object.issues.map((issue, index) => parseIssue(issue, `/issues/${index}`)),
   };
+}
+
+function hashValue(value: unknown, path: string, length: 40 | 64): string {
+  const result = stringValue(value, path, length);
+  if (!new RegExp(`^[a-f0-9]{${length}}$`, "u").test(result)) {
+    fail(path, length === 40 ? "expected full Git SHA" : "expected SHA-256");
+  }
+  return result;
+}
+
+function parseReportEvidence(value: unknown, path: string): ReportEvidenceV1 {
+  const object = record(value, path);
+  strictKeys(
+    object,
+    ["capsuleHash", "commitSha", "lockfileSha256", "dependencyVersion"],
+    ["capsuleHash", "commitSha", "lockfileSha256", "dependencyVersion"],
+    path,
+  );
+  return {
+    capsuleHash: hashValue(object.capsuleHash, `${path}/capsuleHash`, 64),
+    commitSha: hashValue(object.commitSha, `${path}/commitSha`, 40),
+    lockfileSha256: hashValue(object.lockfileSha256, `${path}/lockfileSha256`, 64),
+    dependencyVersion: stringValue(object.dependencyVersion, `${path}/dependencyVersion`, 256),
+  };
+}
+
+function parseDifference(value: unknown, path: string): BehaviorDiffV1 {
+  const object = record(value, path);
+  strictKeys(
+    object,
+    ["schemaVersion", "kind", "blocking", "matchKey", "base", "candidate", "summary"],
+    ["schemaVersion", "kind", "blocking", "matchKey", "summary"],
+    path,
+  );
+  if (object.schemaVersion !== "1") fail(`${path}/schemaVersion`, "expected \"1\"");
+  const kinds: readonly DiffKind[] = [
+    "added-call",
+    "removed-call",
+    "changed-return",
+    "changed-error",
+    "changed-mutation",
+    "changed-sequence",
+    "timing-warning",
+    "ambiguous",
+  ];
+  if (!kinds.includes(object.kind as DiffKind)) fail(`${path}/kind`, "unknown difference kind");
+  if (typeof object.blocking !== "boolean") fail(`${path}/blocking`, "expected boolean");
+  const kind = object.kind as DiffKind;
+  const hasBase = Object.prototype.hasOwnProperty.call(object, "base");
+  const hasCandidate = Object.prototype.hasOwnProperty.call(object, "candidate");
+  if (kind === "added-call" && (hasBase || !hasCandidate)) {
+    fail(path, "added-call requires candidate only");
+  }
+  if (kind === "removed-call" && (!hasBase || hasCandidate)) {
+    fail(path, "removed-call requires base only");
+  }
+  if (!["added-call", "removed-call", "ambiguous"].includes(kind) && (!hasBase || !hasCandidate)) {
+    fail(path, `${kind} requires base and candidate`);
+  }
+  const result: {
+    schemaVersion: "1";
+    kind: DiffKind;
+    blocking: boolean;
+    matchKey: string;
+    base?: CallObservationV1;
+    candidate?: CallObservationV1;
+    summary: string;
+  } = {
+    schemaVersion: "1",
+    kind,
+    blocking: object.blocking,
+    matchKey: stringValue(object.matchKey, `${path}/matchKey`, 4_096),
+    summary: stringValue(object.summary, `${path}/summary`, 4_096),
+  };
+  if (hasBase) result.base = parseCall(object.base, `${path}/base`);
+  if (hasCandidate) result.candidate = parseCall(object.candidate, `${path}/candidate`);
+  return result;
+}
+
+function parseReproduction(value: unknown, path: string): ReproductionEvidenceV1 {
+  const object = record(value, path);
+  strictKeys(
+    object,
+    ["directory", "manifestSha256", "matchKey"],
+    ["directory", "manifestSha256", "matchKey"],
+    path,
+  );
+  return {
+    directory: stringValue(object.directory, `${path}/directory`, 4_096),
+    manifestSha256: hashValue(object.manifestSha256, `${path}/manifestSha256`, 64),
+    matchKey: stringValue(object.matchKey, `${path}/matchKey`, 4_096),
+  };
+}
+
+export function parseReport(input: string | Uint8Array): ReportV1 {
+  const text = typeof input === "string" ? input : new TextDecoder().decode(input);
+  if (Buffer.byteLength(text, "utf8") > REPORT_LIMITS.maxBytes) {
+    fail("/", "report byte limit exceeded");
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    fail("/", "invalid JSON");
+  }
+  const object = record(parsed, "/");
+  strictKeys(
+    object,
+    [
+      "schemaVersion",
+      "kind",
+      "dependency",
+      "verdict",
+      "blockingDifferenceCount",
+      "warningCount",
+      "baseline",
+      "candidate",
+      "differences",
+      "reproduction",
+    ],
+    [
+      "schemaVersion",
+      "kind",
+      "dependency",
+      "verdict",
+      "blockingDifferenceCount",
+      "warningCount",
+      "baseline",
+      "candidate",
+      "differences",
+    ],
+    "/",
+  );
+  if (object.schemaVersion !== "1") fail("/schemaVersion", "expected \"1\"");
+  if (object.kind !== "prooftape-report") fail("/kind", "expected prooftape-report");
+  if (!["no-blocking-differences-observed", "behavior-changed"].includes(String(object.verdict))) {
+    fail("/verdict", "unknown verdict");
+  }
+  if (!Array.isArray(object.differences)) fail("/differences", "expected array");
+  if (object.differences.length > REPORT_LIMITS.maxDifferences) {
+    fail("/differences", "difference limit exceeded");
+  }
+  const differences = object.differences.map((difference, index) =>
+    parseDifference(difference, `/differences/${index}`),
+  );
+  const blockingDifferenceCount = integer(
+    object.blockingDifferenceCount,
+    "/blockingDifferenceCount",
+  );
+  const warningCount = integer(object.warningCount, "/warningCount");
+  if (blockingDifferenceCount !== differences.filter((difference) => difference.blocking).length) {
+    fail("/blockingDifferenceCount", "does not match differences");
+  }
+  if (warningCount !== differences.filter((difference) => !difference.blocking).length) {
+    fail("/warningCount", "does not match differences");
+  }
+  const verdict = object.verdict as ReportVerdict;
+  if ((blockingDifferenceCount > 0) !== (verdict === "behavior-changed")) {
+    fail("/verdict", "does not match blocking difference count");
+  }
+  const result: {
+    schemaVersion: "1";
+    kind: "prooftape-report";
+    dependency: string;
+    verdict: ReportVerdict;
+    blockingDifferenceCount: number;
+    warningCount: number;
+    baseline: ReportEvidenceV1;
+    candidate: ReportEvidenceV1;
+    differences: readonly BehaviorDiffV1[];
+    reproduction?: ReproductionEvidenceV1;
+  } = {
+    schemaVersion: "1",
+    kind: "prooftape-report",
+    dependency: stringValue(object.dependency, "/dependency", 256),
+    verdict,
+    blockingDifferenceCount,
+    warningCount,
+    baseline: parseReportEvidence(object.baseline, "/baseline"),
+    candidate: parseReportEvidence(object.candidate, "/candidate"),
+    differences,
+  };
+  if (Object.prototype.hasOwnProperty.call(object, "reproduction")) {
+    result.reproduction = parseReproduction(object.reproduction, "/reproduction");
+  }
+  return result;
 }
 
 export const EXIT = Object.freeze({

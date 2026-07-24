@@ -3,7 +3,9 @@ import {
   CAPSULE_LIMITS,
   EXIT,
   parseCapsule,
+  parseReport,
   type CapsuleV1,
+  type ReportV1,
 } from "../src/index.js";
 
 describe("public exit contract", () => {
@@ -77,5 +79,53 @@ describe("parseCapsule", () => {
       calls: Array.from({ length: CAPSULE_LIMITS.maxCalls + 1 }, () => capsule.calls[0]),
     };
     expect(() => parseCapsule(JSON.stringify(oversized))).toThrow(/call limit/);
+  });
+});
+
+const report: ReportV1 = {
+  schemaVersion: "1",
+  kind: "prooftape-report",
+  dependency: "fixture",
+  verdict: "behavior-changed",
+  blockingDifferenceCount: 1,
+  warningCount: 0,
+  baseline: {
+    capsuleHash: "d".repeat(64),
+    commitSha: "a".repeat(40),
+    lockfileSha256: "b".repeat(64),
+    dependencyVersion: "1.0.0",
+  },
+  candidate: {
+    capsuleHash: "e".repeat(64),
+    commitSha: "f".repeat(40),
+    lockfileSha256: "c".repeat(64),
+    dependencyVersion: "2.0.0",
+  },
+  differences: [{
+    schemaVersion: "1",
+    kind: "changed-return",
+    blocking: true,
+    matchKey: "fixture:parse:test.mjs:test:1",
+    base: capsule.calls[0],
+    candidate: { ...capsule.calls[0], value: "changed" },
+    summary: "parse changed return value",
+  }],
+};
+
+describe("parseReport", () => {
+  it("round-trips a valid v1 report", () => {
+    expect(parseReport(JSON.stringify(report))).toEqual(report);
+  });
+
+  it("rejects incompatible versions, unknown fields, and inconsistent counts", () => {
+    expect(() => parseReport(JSON.stringify({ ...report, schemaVersion: "2" }))).toThrow(
+      /schemaVersion/,
+    );
+    expect(() => parseReport(JSON.stringify({ ...report, injected: true }))).toThrow(
+      /unknown field/,
+    );
+    expect(() => parseReport(JSON.stringify({ ...report, blockingDifferenceCount: 0 }))).toThrow(
+      /blockingDifferenceCount/,
+    );
   });
 });

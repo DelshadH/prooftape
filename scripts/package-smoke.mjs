@@ -118,7 +118,30 @@ try {
   if (capsule.kind !== "prooftape-capsule" || capsule.calls?.length !== 1) {
     throw new Error("packed CLI record smoke produced an invalid capsule");
   }
-  process.stdout.write("Packed CLI help and record smoke passed.\n");
+  const actionOutput = join(temporary, "github-output.txt");
+  run(process.execPath, [join(repository, "scripts", "action-record.mjs")], {
+    cwd: repository,
+    env: {
+      ...process.env,
+      GITHUB_OUTPUT: actionOutput,
+      GITHUB_WORKSPACE: fixture,
+      PROOFTAPE_ACTION_COMMAND: quotedNode,
+      PROOFTAPE_ACTION_DEPENDENCY: "fixture",
+      PROOFTAPE_ACTION_OUTPUT: "action.ptape",
+      PROOFTAPE_ACTION_TIMEOUT_MS: "10000",
+      PROOFTAPE_ACTION_WORKING_DIRECTORY: ".",
+    },
+  });
+  const actionCapsule = JSON.parse(await readFile(join(fixture, "action.ptape"), "utf8"));
+  const outputMetadata = await readFile(actionOutput, "utf8");
+  if (
+    actionCapsule.kind !== "prooftape-capsule"
+    || actionCapsule.calls?.length !== 1
+    || !/capsule-sha256=[a-f0-9]{64}/u.test(outputMetadata)
+  ) {
+    throw new Error("composite Action helper smoke produced invalid evidence");
+  }
+  process.stdout.write("Packed CLI and composite Action recording smoke passed.\n");
 } finally {
   await rm(temporary, { recursive: true, force: true });
 }

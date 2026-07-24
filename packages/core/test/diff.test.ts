@@ -32,6 +32,32 @@ describe("diffMatchedCall", () => {
     const { value: _removed, ...withoutValue } = base;
     expect(diffMatchedCall(withoutValue, base).map((item) => item.kind)).toContain("changed-return");
   });
+
+  it("blocks changed argument mutation", () => {
+    const candidate = {
+      ...base,
+      argsAfter: [{ value: "candidate-mutated" }],
+    } satisfies CallObservationV1;
+
+    expect(diffMatchedCall(base, candidate).map((item) => item.kind))
+      .toEqual(["changed-mutation"]);
+  });
+
+  it("blocks changed asynchronous rejection contracts", () => {
+    const rejected = {
+      ...base,
+      outcome: "reject",
+      value: undefined,
+      error: { name: "RangeError", message: "base rejection", code: "E_RANGE" },
+    } satisfies CallObservationV1;
+    const candidate = {
+      ...rejected,
+      error: { name: "RangeError", message: "candidate rejection", code: "E_RANGE" },
+    } satisfies CallObservationV1;
+
+    expect(diffMatchedCall(rejected, candidate).map((item) => item.kind))
+      .toEqual(["changed-error"]);
+  });
 });
 
 describe("diffCalls", () => {
