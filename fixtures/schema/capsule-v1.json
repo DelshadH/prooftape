@@ -1,0 +1,42 @@
+{
+  "schemaVersion": "1",
+  "kind": "prooftape-capsule",
+  "metadata": {
+    "commitSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "lockfileSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "nodeVersion": "v22.22.0",
+    "platform": "linux",
+    "arch": "x64",
+    "command": [
+      "node",
+      "test.mjs"
+    ],
+    "dependency": {
+      "name": "fixture",
+      "version": "1.0.0",
+      "entry": "node_modules/fixture/index.js"
+    },
+    "prooftapeVersion": "0.0.0",
+    "configurationSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+  },
+  "calls": [
+    {
+      "schemaVersion": "1",
+      "callId": "p1:1",
+      "sequence": 1,
+      "processId": "p1",
+      "dependency": "fixture",
+      "exportPath": "parse",
+      "callSiteFingerprint": "test.mjs:test",
+      "argsBefore": [
+        "x"
+      ],
+      "argsAfter": [
+        "x"
+      ],
+      "outcome": "return",
+      "value": "ok"
+    }
+  ],
+  "issues": []
+}

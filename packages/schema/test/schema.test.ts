@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   CAPSULE_LIMITS,
@@ -52,6 +53,14 @@ const capsule: CapsuleV1 = {
 };
 
 describe("parseCapsule", () => {
+  it("parses the committed version 1 golden capsule", () => {
+    const golden = readFileSync(
+      new URL("../../../fixtures/schema/capsule-v1.json", import.meta.url),
+      "utf8",
+    );
+    expect(parseCapsule(golden)).toEqual(capsule);
+  });
+
   it("round-trips a valid v1 capsule", () => {
     expect(parseCapsule(JSON.stringify(capsule))).toEqual(capsule);
   });
@@ -113,6 +122,14 @@ const report: ReportV1 = {
 };
 
 describe("parseReport", () => {
+  it("parses the committed version 1 golden report", () => {
+    const golden = readFileSync(
+      new URL("../../../fixtures/schema/report-v1.json", import.meta.url),
+      "utf8",
+    );
+    expect(parseReport(golden)).toEqual(report);
+  });
+
   it("round-trips a valid v1 report", () => {
     expect(parseReport(JSON.stringify(report))).toEqual(report);
   });

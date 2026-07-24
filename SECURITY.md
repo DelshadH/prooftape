@@ -13,5 +13,7 @@ High-priority areas include:
 - unintended privileged execution in GitHub Actions;
 - instrumentation changing supported program behavior.
 
-ProofTape is pre-release software. Until version 0.1 is published, use only
-synthetic fixtures or disposable repositories without credentials.
+ProofTape is pre-release software. Until version 0.1 is published, run local
+comparisons only in disposable repositories without credentials. For hostile
+pull requests, use the separate-job workflow described in
+`docs/github.md` on an ephemeral hosted runner.

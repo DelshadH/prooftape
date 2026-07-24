@@ -2,53 +2,97 @@
 
 ## Packages
 
-- `@prooftape/schema`: versioned event, capsule, diff, and report schemas. No runtime dependencies.
-- `@prooftape/hook`: Node preload/register hook that intercepts the configured package while preserving supported semantics.
-- `@prooftape/core`: canonicalization, normalization, matching, diffing, isolation orchestration, and counterexample export.
-- `prooftape`: CLI and exit-code contract.
-- `@prooftape/action`: thin GitHub Action wrapper after the CLI is proven.
+- `@prooftape/schema` defines and strictly parses versioned calls, capsules,
+  differences, and reports. It has no runtime dependencies.
+- `@prooftape/hook` registers Node synchronous module hooks and rewrites
+  supported application call expressions.
+- `@prooftape/core` serializes values, merges raw events, normalizes, matches,
+  diffs, manages worktrees, and generates reproductions.
+- `prooftape` provides the CLI and exit-code contract.
+- `packages/action` provides the composite recording Action used by
+  separate-job workflows.
 
-## Execution pipeline
+`acorn` is the only non-workspace runtime dependency. A real JavaScript parser
+is required to preserve evaluation order and distinguish supported call syntax;
+regular-expression rewriting is not safe enough for that boundary.
 
-1. Resolve and validate exact base/candidate SHAs.
-2. In local mode create isolated worktrees; in GitHub mode record them in separate no-secret jobs.
-3. Install each revision using its detected lockfile's frozen mode.
-4. Execute the same command with the ProofTape hook preloaded.
-5. Write append-only raw observations per process; merge by process/order metadata.
-6. Canonicalize and normalize with an auditable transform log.
-7. Match corresponding calls, classify differences, and reject unsupported observations explicitly.
-8. For serializable changed calls, generate and execute a minimal `repro.mjs` against both dependency versions.
-9. Emit terminal output, `report.json`, JUnit/Check annotations, and evidence metadata.
+## Local pipeline
 
-## GitHub execution split
+1. Validate a clean Git root and two exact commit objects.
+2. Create separate detached base and candidate worktrees.
+3. Run `npm ci --ignore-scripts --no-audit --no-fund` in each worktree.
+4. Resolve the named dependency and record its installed version and entry.
+5. Start the direct command with the ProofTape hook in `NODE_OPTIONS`.
+6. Write bounded append-only JSONL, one file per process or worker thread.
+7. Reject partial, malformed, cross-session, oversized, symlinked, or unexpected
+   raw files.
+8. Replace process IDs deterministically, remove duration, apply declared
+   normalizers, and create a canonical capsule.
+9. Match calls by dependency, export path, call site, and occurrence, then
+   classify return, error, mutation, presence, and order differences.
+10. Generate `repro.mjs` only for a changed return, error, or mutation whose
+    inputs and outcomes can be replayed without redaction or normalization.
+11. Execute the reproduction against both installed revisions. Base must exit 0
+    and candidate must exit 1 before the report links it.
 
-`record-base` and `record-candidate` are separate unprivileged jobs without caches or secrets. Each uploads one bounded capsule. A third trusted-verifier job downloads both, validates hashes/schema/limits, and performs `prooftape diff`. This prevents candidate code from modifying the base recording through a shared filesystem. For a hostile contributor model, enforce the workflow from a protected organization/ruleset or external app; a workflow editable in the PR is only an accidental-agent control.
+The recorder checks repository status before and after the command. It also
+passes only a small non-secret environment allowlist plus the hook
+configuration.
 
-## Interception strategy
+## Transparent interception
 
-Use Node's synchronous module customization hooks registered from `--import`. The feasibility gate must prove both ESM and CJS behavior on supported surfaces. Wrappers may be used only where identity and descriptors are preserved or the limitation is explicitly rejected as unsupported.
+The preload calls Node's synchronous `module.registerHooks`. Its load hook parses
+application ESM or CommonJS source, finds static bindings to the named package,
+and replaces the call expression with:
 
-The hook must not recursively instrument dependency-internal calls as application entry calls. Determine the boundary from importer/call-site ownership and record a documented fallback where exact ownership is unavailable.
+```text
+runtime.invoke(dependency, exportPath, originalFunction, receiver, arguments)
+```
+
+The imported or required binding is never replaced, so visible function
+identity and descriptors remain unchanged. `Reflect.apply` preserves the
+receiver. The runtime returns the original result, rethrows the same error
+object, and returns the original native Promise while observing its settlement.
+Dependency-internal modules and unrelated modules are not transformed.
+
+If a module contains a relevant unsupported construct, the hook leaves that
+module unchanged and writes an explicit issue. Partial instrumentation of the
+same module is not presented as complete evidence.
 
 ## Matching
 
-Start with a deterministic composite key:
+The deterministic base key is:
 
-`exportPath + occurrenceWithinTest + normalizedCallSiteFingerprint + normalizedArgsFingerprint`
+```text
+dependency + exportPath + normalizedCallSiteFingerprint
+```
 
-Then use sequence-aware alignment for insertions/deletions. Never hide ambiguous matches; classify them as `ambiguous` and fail the harness until the user supplies a stable key or scope filter.
+Equal-count repeats align by occurrence. Unequal duplicate counts are
+ambiguous; ProofTape does not guess. Matched-call order is compared separately
+from added and removed calls.
 
-## Counterexample format
+## Reproduction directory
 
-A counterexample directory contains:
+A safe counterexample contains:
 
 - `repro.mjs`;
 - `input.json`;
-- base and candidate package manifests/lock excerpts;
-- expected base and observed candidate outcome;
-- one-command Docker or local replay instruction;
-- SHA-256 manifest.
+- `base-package.json`;
+- `candidate-package.json`;
+- `README.md`;
+- `manifest.json` with a SHA-256 for every generated file.
 
-## Extension boundary
+The script resolves the dependency from the checkout where it is run. Exit 0
+means the observed result matches the base evidence; exit 1 means it differs.
 
-Do not build a plugin system in v0.1. Keep clear internal interfaces for serializer, normalizer, matcher, and reporter, but ship one implementation of each.
+## GitHub split
+
+`.github/workflows/prooftape.yml` has independent base, candidate, and verifier
+jobs. The jobs use a fixed ProofTape commit and full-SHA third-party Actions.
+They have only `contents: read`, receive no secrets, use no dependency cache,
+disable npm lifecycle scripts, and never use `pull_request_target`.
+
+Each recording job publishes a capsule plus its SHA-256 as a job output. The
+verifier downloads the two immutable-name artifacts, checks those hashes,
+strictly parses both capsules, emits the report/reproduction artifact, and then
+enforces the public exit code.

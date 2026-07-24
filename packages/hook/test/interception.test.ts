@@ -284,4 +284,66 @@ describe("Node module interception", () => {
       }),
     ]);
   });
+
+  it("reports event count and event byte loss explicitly", async () => {
+    const countFixture = await writeFixture("esm");
+    await writeFile(
+      countFixture.app,
+      [
+        'import { add } from "fixture";',
+        "if (add(1, 2) + add(3, 4) !== 10) process.exitCode = 9;",
+      ].join("\n"),
+    );
+    const countResult = run(countFixture.app, countFixture.directory, {
+      schemaVersion: "1",
+      dependency: "fixture",
+      outputDirectory: countFixture.output,
+      sessionId: "eventlimit01",
+      limits: {
+        maxEvents: 1,
+        maxEventBytes: 65_536,
+        maxDepth: 12,
+        maxCollectionEntries: 100,
+        maxStringBytes: 16_384,
+      },
+      redactLiterals: [],
+    });
+    expect(countResult.status, countResult.stderr).toBe(0);
+    const countRecords = await observations(countFixture.output);
+    expect(countRecords.filter((record) => record.kind === "call")).toHaveLength(1);
+    expect(countRecords).toContainEqual(expect.objectContaining({
+      kind: "issue",
+      issue: expect.objectContaining({ code: "PT_EVENT_LIMIT" }),
+    }));
+
+    const bytesFixture = await writeFixture("esm");
+    await writeFile(
+      bytesFixture.app,
+      [
+        'import { add } from "fixture";',
+        `if (add(${JSON.stringify("x".repeat(5_000))}, "") === "") process.exitCode = 9;`,
+      ].join("\n"),
+    );
+    const bytesResult = run(bytesFixture.app, bytesFixture.directory, {
+      schemaVersion: "1",
+      dependency: "fixture",
+      outputDirectory: bytesFixture.output,
+      sessionId: "eventbytes01",
+      limits: {
+        maxEvents: 10,
+        maxEventBytes: 1_024,
+        maxDepth: 12,
+        maxCollectionEntries: 100,
+        maxStringBytes: 16_384,
+      },
+      redactLiterals: [],
+    });
+    expect(bytesResult.status, bytesResult.stderr).toBe(0);
+    const byteRecords = await observations(bytesFixture.output);
+    expect(byteRecords.filter((record) => record.kind === "call")).toEqual([]);
+    expect(byteRecords).toContainEqual(expect.objectContaining({
+      kind: "issue",
+      issue: expect.objectContaining({ code: "PT_EVENT_BYTES" }),
+    }));
+  });
 });

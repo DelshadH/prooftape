@@ -1,0 +1,61 @@
+# Version 1 formats
+
+ProofTape writes canonical JSON followed by one newline. All public objects use
+`"schemaVersion": "1"`. Parsers reject unknown fields and incompatible versions
+instead of guessing forward compatibility.
+
+## Capsule
+
+A capsule has:
+
+- `kind: "prooftape-capsule"`;
+- evidence metadata for commit, lockfile, runtime, command, dependency, tool,
+  and configuration;
+- an ordered `calls` array;
+- an `issues` array.
+
+Each call records dependency, export path, call site, normalized process and
+sequence identifiers, arguments before and after, and exactly one return,
+throw, resolve, or reject outcome. Optional normalization and unsupported-value
+arrays point to every changed or rejected field.
+
+Capsules are limited to 10 MiB, 10,000 calls, 1,000 issues, JSON depth 32, and
+10,000 JSON entries per validated value. Raw capture uses additional per-file,
+per-line, total-byte, and event limits.
+
+## Tagged values
+
+Version 1 uses `$prooftape` objects for:
+
+- `undefined`;
+- `nan`, `infinity`, `-infinity`, and `-0`;
+- decimal-string `bigint`;
+- ISO-string `date`;
+- explicit `unsupported` with a reason.
+
+Object keys are sorted recursively. Plain JSON strings remain strings. Cycles,
+accessors, custom prototypes, symbols, proxy traps, and bounded-limit failures
+are unsupported rather than lossy encodings.
+
+## Report
+
+A report has:
+
+- `kind: "prooftape-report"`;
+- dependency and verdict;
+- blocking and warning counts that must equal the difference array;
+- base and candidate capsule hashes, commits, lockfile hashes, and dependency
+  versions;
+- versioned differences;
+- optional reproduction metadata.
+
+The two verdicts are `no-blocking-differences-observed` and
+`behavior-changed`. Reports are limited to 20 MiB and 20,000 differences.
+
+## Hashes
+
+Capsule hashes cover canonical capsule bytes without the trailing file newline.
+Lockfile hashes cover exact installed-checkout bytes. Artifact hashes in the
+GitHub workflow cover the complete capsule file bytes, including its newline.
+Reproduction manifests hash each generated file and then hash the canonical
+manifest.

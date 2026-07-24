@@ -1,71 +1,101 @@
 # ProofTape
 
-**Catch runtime behavior changes in dependency-upgrade pull requests—even when the tests stay green.**
+**Catch runtime behavior changes in dependency upgrades, even when both test
+suites stay green.**
 
-ProofTape records how an application calls one npm dependency at a trusted base
-revision, records the same calls on a candidate revision, and reports meaningful
-differences. A report can include changed return values, exceptions, argument
-mutation, and call ordering, plus a small executable reproduction when the data
-can be serialized safely.
+ProofTape records how an application calls one npm dependency at an exact base
+revision, records the same supported calls at an exact candidate revision, and
+compares the results. It detects changed returns, errors, argument mutation,
+call presence, and relative order. When the captured values are safe to replay,
+it also writes an executable minimal reproduction.
 
-This matters when an automated upgrade also edits tests: a green suite can show
-that the new code agrees with the new tests, but it does not independently show
-that observed dependency behavior stayed the same.
+> **Status:** honest pre-0.1 seed. The end-to-end CLI, recorder, schemas,
+> isolated worktrees, reproduction generator, package smoke test, and
+> least-privilege reusable workflow are implemented and exercised. The npm
+> packages are not published yet, the supported JavaScript surface is
+> deliberately narrow, and the local runner is not a sandbox for hostile code.
 
-> **Status:** pre-0.1 development. The schema and diffing kernel are present; the
-> recorder, isolation runner, and release CLI are not complete yet. Do not put
-> ProofTape in a required CI check until the 0.1 release.
+## Run from a checkout
 
-## Intended command
+ProofTape requires Node 22.15 or newer and an npm lockfile.
 
 ```bash
-prooftape compare \
+npm ci --ignore-scripts
+npm run build
+
+node packages/cli/dist/cli.js compare \
   --base-ref "$BASE_SHA" \
   --candidate-ref "$HEAD_SHA" \
   --dependency zod \
   --command "npm test"
 ```
 
-The lower-level flow will also be available:
+`compare` requires two full lowercase commit SHAs and a completely clean
+repository. It creates detached worktrees, runs `npm ci --ignore-scripts` in
+each, records the same direct command, and removes the worktrees afterward.
+
+The lower-level flow is useful when base and candidate recording must happen on
+different machines or in different GitHub jobs:
 
 ```bash
-prooftape record --dependency zod --command "npm test" --out baseline.ptape
-prooftape record --dependency zod --command "npm test" --out candidate.ptape
-prooftape diff --baseline baseline.ptape --candidate candidate.ptape --repro-dir repro
+node packages/cli/dist/cli.js record --dependency zod --command "npm test" --out baseline.ptape
+node packages/cli/dist/cli.js record --dependency zod --command "npm test" --out candidate.ptape
+node packages/cli/dist/cli.js diff --baseline baseline.ptape --candidate candidate.ptape
 ```
+
+Commands are parsed into an argument vector and executed without a shell.
+Operators, substitutions, multiline input, and more than 256 arguments are
+rejected.
+
+## What is supported
+
+The recorder handles static ESM imports and CommonJS `require` bindings that are
+called directly or through one static member. It records synchronous returns and
+throws, native Promise resolutions and rejections, and before/after argument
+values. ESM and CJS fixtures prove that supported calls retain their result,
+`this`, function identity, and required descriptors.
+
+Dynamic imports, re-exports, constructors, tagged templates, optional calls,
+computed or deep members, `call`/`apply`/`bind`, custom prototypes, cycles,
+accessors, and other unsafe values are explicit unsupported results. They never
+quietly produce a clean verdict. See [the product contract](docs/product.md) for
+the full boundary.
 
 Exit codes are part of the public contract:
 
-- `0`: no blocking difference was observed in captured, supported calls.
+- `0`: no blocking difference was observed in captured supported calls.
 - `2`: one or more blocking behavior differences were found.
-- `3`: the harness, command, instrumentation, or isolation failed.
-- `4`: the input is invalid or uses an unsupported surface.
+- `3`: the harness, command, instrumentation, isolation, or matching failed.
+- `4`: input is invalid or an observed surface is unsupported.
 
-## Scope
-
-The first release targets Node.js 22 and 24, npm lockfiles, one explicitly named
-dependency, JSON-safe functions and object methods, and synchronous or
-promise-based outcomes. It will not claim total semantic equivalence or safety
-for unobserved calls.
-
-The product contract is in [docs/product.md](docs/product.md), the implementation
-shape is in [docs/architecture.md](docs/architecture.md), and the release proofs
-are in [docs/quality-plan.md](docs/quality-plan.md).
-
-## Development
+## Reproducible proof
 
 ```bash
-npm install --ignore-scripts
-npm run typecheck
-npm test
+npm run check
+npm run smoke:package
+npm run demo
+npm run demo:record
+npm run real-upgrades
+npm run performance
+npm run security
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
+The demo shows green base and candidate tests, one blocking change, and the same
+counterexample in `report.json` and `repro.mjs`. The real-upgrade gate covers
+locked `camelcase`, `is-number`, and `ms` upgrades. CI runs the supported Node
+22 and 24 matrix.
+
+The JSON format is documented in [docs/formats.md](docs/formats.md), the
+security boundary in [docs/security-model.md](docs/security-model.md), and every
+release gate in [docs/quality-plan.md](docs/quality-plan.md). The protected
+workflow setup is in [docs/github.md](docs/github.md).
 
 ## Security
 
-ProofTape executes project test commands and may observe sensitive arguments.
-Read [SECURITY.md](SECURITY.md) and [docs/security-model.md](docs/security-model.md)
-before trying it on private code.
+Recorded commands are arbitrary project code. Use a disposable local repository
+or the separate-job GitHub workflow, never a privileged self-hosted runner.
+ProofTape removes unrelated environment variables before starting the command,
+but it does not contain filesystem or network access on a local machine. Read
+[SECURITY.md](SECURITY.md) before using captured private data.
 
 Apache-2.0 licensed.

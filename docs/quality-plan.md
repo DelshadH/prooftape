@@ -37,3 +37,20 @@ The demo must show, in one uninterrupted run:
 6. `report.json` names the same counterexample.
 
 A hand-edited screenshot is not evidence.
+
+## Automated gate map
+
+| Gate | Verifier |
+|---|---|
+| PT-G13 | `.github/workflows/ci.yml` runs locked install, typecheck, all tests, audit, and packed CLI/Action smoke on Node 22 and 24. |
+| PT-G01, PT-G10 | `packages/hook/test/interception.test.ts`, `runtime.test.ts`, and `transform.test.ts` execute real ESM, CJS, native Promise, error, mutation, worker, and child-process fixtures. |
+| PT-G02, PT-G03 | Schema, capsule, serialization, and property tests plus the 20-run recording test prove strict parsing and byte-identical repetition. |
+| PT-G14 | Hook child/worker tests and raw-capsule corruption, session, line, file, and byte-limit tests make capture loss explicit. |
+| PT-G04 | `npm run demo` executes both green commands, returns ProofTape exit 2, and verifies the same report/reproduction match key. |
+| PT-G05 | Runtime, diff, report, and compare tests cover mutation, rejection, insertion, deletion, sequence, and ambiguous repeats. |
+| PT-G06 | `packages/core/test/normalize.test.ts` proves declared-only UUID, timestamp, and path normalization with an audit record per field. |
+| PT-G07 | Compare tests attack the base sibling and candidate checkout; `.github/workflows/prooftape.yml` separates jobs and binds artifacts to producing-job hashes. |
+| PT-G08 | `npm run real-upgrades` builds isolated Git histories from six committed lockfiles and tests `camelcase`, `is-number`, and `ms`. |
+| PT-G09 | `npm run security` combines npm audit, license allowlist, production-install-script check, tracked-source secret scan, and workflow policy scan. |
+| PT-G11 | `npm run performance` records seven raw sample pairs, environment, medians, and the enforced 2.0× budget. |
+| PT-G12 | The Node 24 quality job runs the demo, 15.5-second cast generation, real upgrades, performance, security, and package smoke from a clean checkout. |

@@ -1,0 +1,63 @@
+{
+  "schemaVersion": "1",
+  "kind": "prooftape-report",
+  "dependency": "fixture",
+  "verdict": "behavior-changed",
+  "blockingDifferenceCount": 1,
+  "warningCount": 0,
+  "baseline": {
+    "capsuleHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "commitSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "lockfileSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "dependencyVersion": "1.0.0"
+  },
+  "candidate": {
+    "capsuleHash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "commitSha": "ffffffffffffffffffffffffffffffffffffffff",
+    "lockfileSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "dependencyVersion": "2.0.0"
+  },
+  "differences": [
+    {
+      "schemaVersion": "1",
+      "kind": "changed-return",
+      "blocking": true,
+      "matchKey": "fixture:parse:test.mjs:test:1",
+      "base": {
+        "schemaVersion": "1",
+        "callId": "p1:1",
+        "sequence": 1,
+        "processId": "p1",
+        "dependency": "fixture",
+        "exportPath": "parse",
+        "callSiteFingerprint": "test.mjs:test",
+        "argsBefore": [
+          "x"
+        ],
+        "argsAfter": [
+          "x"
+        ],
+        "outcome": "return",
+        "value": "ok"
+      },
+      "candidate": {
+        "schemaVersion": "1",
+        "callId": "p1:1",
+        "sequence": 1,
+        "processId": "p1",
+        "dependency": "fixture",
+        "exportPath": "parse",
+        "callSiteFingerprint": "test.mjs:test",
+        "argsBefore": [
+          "x"
+        ],
+        "argsAfter": [
+          "x"
+        ],
+        "outcome": "return",
+        "value": "changed"
+      },
+      "summary": "parse changed return value"
+    }
+  ]
+}

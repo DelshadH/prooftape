@@ -1,21 +1,25 @@
 # Contributing
 
-ProofTape is early and its trust boundaries are still settling. Before starting
-work, read `docs/product.md`, `docs/architecture.md`, and
-`docs/security-model.md`.
+Read `docs/product.md`, `docs/security-model.md`, `docs/architecture.md`, and
+`docs/quality-plan.md` before changing a public boundary.
 
-Keep pull requests narrow. Add a failing fixture first, then the implementation,
-tests, and any documentation affected by the behavior. Changes to interception,
-canonical data, baseline integrity, redaction, workflow permissions, or resource
-limits need an explicit security note in the pull request.
+Keep changes narrow and start behavioral work with a failing fixture. Changes
+to interception, canonical data, baseline integrity, redaction, workflow
+permissions, resource limits, or exit codes need a test that exercises the real
+CLI or hook.
 
-Run:
+Run the same checks used for a release:
 
 ```bash
-npm run typecheck
-npm test
-npm run build
+npm ci --ignore-scripts
+npm run check
+npm run smoke:package
+npm run demo
+npm run real-upgrades
+npm run performance
+npm run security
 ```
 
-Please do not add a dashboard, hosted service, additional language, or plugin
-system before the 0.1 command-line path is complete.
+Do not weaken a quality gate to make CI green. Do not add a dashboard, hosted
+service, language, plugin system, or runtime dependency without a concrete need
+inside the pre-0.1 command-line contract.

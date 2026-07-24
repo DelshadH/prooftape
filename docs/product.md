@@ -1,59 +1,106 @@
 # Product contract
 
-## One-sentence promise
+## Promise
 
-Given a protected base revision and an untrusted candidate revision, ProofTape identifies supported application-to-dependency behavior that changed at runtime and emits a reproducible, machine-readable counterexample even when both revisions' tests pass.
+Given an exact protected base revision and an untrusted candidate revision,
+ProofTape identifies supported application-to-one-dependency behavior that
+changed at runtime and emits a machine-readable counterexample even when both
+commands pass.
 
-## User
+This is an independent evidence channel. It is not proof of total equivalence,
+correct tests, or safety for code that was not executed.
 
-A maintainer reviewing an automated dependency-upgrade PR, and the coding agent repairing that PR.
+## Inputs
 
-## v0.1 inputs
+- Two full lowercase Git commit SHAs, or two independently recorded version 1
+  capsules.
+- Exactly one npm package name, including an optional package subpath.
+- One direct command represented by a shell-like quoted string. ProofTape parses
+  quoting but does not start a shell.
+- Optional repeated secret literals for redaction.
+- Optional repeated literal normalizers in
+  `<literal>=<replacement>` form.
+- A clean Git root and npm lockfile version 2 or 3.
 
-- Base Git commit SHA and candidate Git commit SHA, or two independently recorded canonical capsules.
-- Exactly one dependency package name.
-- One shell test command.
-- Optional include/exclude export paths and deterministic normalizers.
-- A clean Git repository with a lockfile in each revision.
+The local `compare` command accepts only a repository root with no tracked,
+untracked, or modified application files. Ignored install output such as
+`node_modules` is allowed.
 
-## v0.1 observed behavior
+## Supported call surface
 
-For each supported call crossing from application code into the named dependency:
+ProofTape instruments application modules, not dependency-internal modules.
+Supported bindings are:
 
-- stable call sequence and call-site fingerprint;
-- export/member path;
-- JSON-safe arguments before invocation;
-- JSON-safe arguments after invocation, to reveal mutation;
-- return or resolved value;
-- thrown or rejected error name, message, code, and JSON-safe enumerable fields;
-- duration as non-blocking diagnostic metadata.
+- ESM default, named, and namespace imports from the exact package or a package
+  subpath;
+- CommonJS direct `require`, static destructuring, and one static required
+  member;
+- a direct call to the binding or one static member call;
+- synchronous return or throw;
+- a native Promise that resolves or rejects;
+- scalar, JSON-safe array, plain-object, null-prototype object, bigint, date,
+  and declared special-number values.
+
+The recorder captures the export path, normalized call-site fingerprint,
+per-process sequence, arguments before and after the call, and the outcome.
+Errors include name, message, optional code, and safe enumerable fields.
+
+## Explicitly unsupported
+
+The current implementation rejects the whole affected application module when
+it sees a dependency dynamic import, re-export, constructor, tagged template,
+optional call, computed member, member deeper than one level, namespace call,
+or `call`/`apply`/`bind`. It also rejects capture values with cycles, accessors,
+enumerable symbol keys, custom prototypes, hostile proxy traps, excessive
+depth, excessive collection size, or excessive strings.
+
+Unsupported syntax becomes a capture issue. Unsupported values are marked at
+their JSON pointer. Either condition prevents a clean comparison and maps to
+exit 4.
 
 ## Blocking differences
 
-- return/resolution value changed;
-- return became throw/reject or vice versa;
+- return or resolution value changed;
+- return/resolution became throw/rejection or the reverse;
 - error contract changed;
 - argument mutation changed;
-- relative sequence of matching supported calls changed;
-- a previously observed supported call vanished or a new supported call appeared.
+- relative sequence of matched calls changed;
+- a supported call appeared or disappeared.
 
-Timing changes are warnings in v0.1. Exact call-site line numbers are diagnostic and must not be the sole matching key.
+Repeated calls with unequal counts and no safe alignment are ambiguous. That is
+a harness failure, not a guessed diff. Durations exist only in bounded raw
+events and are deliberately removed from canonical capsules; version 1 makes no
+performance-regression verdict.
 
-## Determinism
+## Determinism and normalization
 
-Canonical JSON uses UTF-8, sorted object keys, explicit schema version, no insignificant whitespace, normalized paths, and a declared representation for `undefined`, `NaN`, infinities, bigints, dates, errors, cycles, and unsupported values. The same input must produce the same capsule hash.
+Canonical JSON is UTF-8 with sorted object keys and no insignificant
+whitespace. Process IDs are replaced with deterministic identifiers, raw
+duration is removed, paths in call-site fingerprints are reduced, and every
+capsule and report has schema version `"1"`.
 
-Default normalizers cover temporary paths and stack-frame locations. UUIDs, timestamps, random IDs, and user fields require explicit opt-in normalizers; ProofTape must show every normalization in the report.
+ProofTape applies no heuristic UUID, timestamp, random-ID, or user-field
+normalization. A declared literal normalizer changes only matching strings and
+adds an audit record containing the JSON pointer, normalizer name, hash of the
+previous value, and replacement. Secret literals and sensitive keys are
+redacted before raw events reach disk.
 
 ## Isolation
 
-Base and candidate execute in separate clean worktrees with their own dependency installation. The verifier records commit SHA, lockfile hash, Node version, OS, command, dependency resolution, ProofTape version, and configuration hash. A failed test command is a harness failure, not a behavioral verdict. In GitHub mode, base and candidate recording run in separate unprivileged jobs; a third job parses bounded artifacts and performs the diff.
+Local comparison creates separate detached worktrees and performs a frozen npm
+install with lifecycle scripts disabled. It records commit SHA, lockfile hash,
+Node version, platform, architecture, direct command, dependency version and
+entry, ProofTape version, and configuration hash. A command failure, timeout,
+output overflow, checkout modification, or empty capture is not a behavioral
+verdict.
+
+The reusable GitHub workflow records base and candidate in separate
+least-privilege jobs. A third job checks producing-job SHA-256 values, parses
+bounded schemas, and performs the diff with a pinned verifier.
 
 ## Non-goals
 
-ProofTape does not prove total semantic equivalence, security, absence of untested changes, compatibility for unobserved calls, or correctness of the existing test suite. The report must use “no blocking differences observed in captured supported calls,” never “safe” without qualification.
-
-## Definition of done
-
-The clean-room release proof in `quality-plan.md` passes from a fresh checkout,
-and every public claim is backed by a reproducible fixture or measurement.
+ProofTape does not prove security, compatibility for unobserved calls, total
+semantic equivalence, or correctness of a test suite. It is not a local sandbox
+for malicious code. Public output says “no blocking differences observed in
+captured supported calls,” never “safe.”
