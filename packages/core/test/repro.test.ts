@@ -51,10 +51,13 @@ async function installedFixture(value: string): Promise<string> {
     join(dependency, "package.json"),
     JSON.stringify({ name: "fixture", version: "1.0.0", type: "module", exports: "./index.js" }),
   );
-  await writeFile(
-    join(dependency, "index.js"),
-    `export function value(input) { return ${JSON.stringify(value)}; }\n`,
-  );
+  const source = value === "before"
+    ? 'export function value(input) { return "before"; }\n'
+    : value === "after"
+      ? 'export function value(input) { return "after"; }\n'
+      : undefined;
+  if (!source) throw new Error("unknown reproduction fixture value");
+  await writeFile(join(dependency, "index.js"), source);
   return directory;
 }
 

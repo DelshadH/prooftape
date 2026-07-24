@@ -44,10 +44,13 @@ async function writeDependency(directory, version, behavior) {
       exports: "./index.js",
     }),
   );
-  await writeFile(
-    join(directory, "index.js"),
-    `export function format(value) { return ${JSON.stringify(behavior)} + value; }\n`,
-  );
+  const source = behavior === "before:"
+    ? 'export function format(value) { return "before:" + value; }\n'
+    : behavior === "after:"
+      ? 'export function format(value) { return "after:" + value; }\n'
+      : undefined;
+  if (!source) throw new Error("unknown demo behavior");
+  await writeFile(join(directory, "index.js"), source);
 }
 
 const repository = resolve(import.meta.dirname, "..");
