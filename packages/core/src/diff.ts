@@ -12,6 +12,7 @@ function optionalComparable<T extends object>(value: T, key: keyof T): string {
 
 export function observationMatchKey(observation: CallObservationV1): string {
   return [
+    observation.dependency,
     observation.exportPath,
     observation.callSiteFingerprint,
     sha256(comparable(observation.argsBefore)),

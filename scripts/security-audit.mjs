@@ -71,8 +71,18 @@ for (const file of trackedFiles()) {
     if (/\bpull_request_target\s*:/u.test(text)) {
       failures.push(`${file}: pull_request_target is forbidden`);
     }
-    if (/\b(?:write-all|contents:\s*write)\b/u.test(text)) {
-      failures.push(`${file}: write permissions are forbidden`);
+    if (/\bwrite-all\b/u.test(text)) {
+      failures.push(`${file}: write-all permission is forbidden`);
+    }
+    for (const match of text.matchAll(/^\s*([a-z-]+):\s*write\s*$/gmu)) {
+      const scope = match[1];
+      const releaseOidc = (
+        file.replaceAll("\\", "/") === ".github/workflows/release.yml"
+        && scope === "id-token"
+      );
+      if (!releaseOidc) {
+        failures.push(`${file}: ${scope}: write permission is forbidden`);
+      }
     }
     if (/\$\{\{\s*secrets\./u.test(text)) {
       failures.push(`${file}: workflow secrets are forbidden`);

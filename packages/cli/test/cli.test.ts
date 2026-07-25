@@ -156,6 +156,31 @@ describe("runCli", () => {
     expect(streams.read().stderr).not.toContain(" at ");
   });
 
+  it("rejects a capsule whose call names a different dependency", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "prooftape-cli-"));
+    const base = capsule("same", "a");
+    const candidate = {
+      ...base,
+      calls: [{ ...base.calls[0]!, dependency: "different-package" }],
+    };
+    await writeFile(join(cwd, "base.ptape"), JSON.stringify(base));
+    await writeFile(join(cwd, "candidate.ptape"), JSON.stringify(candidate));
+    const streams = output();
+
+    expect(await runCli([
+      "diff",
+      "--baseline",
+      "base.ptape",
+      "--candidate",
+      "candidate.ptape",
+      "--report",
+      "report.json",
+    ], { cwd, ...streams.io })).toBe(4);
+    expect(streams.read().stderr).toMatch(
+      /calls\/0\/dependency.*metadata dependency/,
+    );
+  });
+
   it("rejects repository traversal for capsule inputs and report outputs", async () => {
     const parent = await mkdtemp(join(tmpdir(), "prooftape-cli-parent-"));
     const cwd = join(parent, "repo");

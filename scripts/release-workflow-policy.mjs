@@ -4,6 +4,22 @@ function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
 
+function hasExactPermissions(text, headerIndent, entryIndent, expected) {
+  const pattern = new RegExp(
+    `^ {${headerIndent}}permissions:[^\\S\\r\\n]*\\r?\\n`
+      + `((?:^ {${entryIndent}}[a-z-]+:[^\\r\\n]*\\r?\\n?)+)`,
+    "gmu",
+  );
+  const blocks = [...text.matchAll(pattern)];
+  if (blocks.length !== 1) return false;
+  const entries = [
+    ...(blocks[0]?.[1] ?? "").matchAll(
+      /^\s*([a-z-]+):\s*(read|write|none)\s*$/gmu,
+    ),
+  ].map((match) => `${match[1]}:${match[2]}`).sort();
+  return JSON.stringify(entries) === JSON.stringify([...expected].sort());
+}
+
 export function auditReleaseWorkflow(text, version) {
   const exactTag = `v${version}`;
   const onBlock = /^on:\s*\r?\n([\s\S]*?)^permissions:/mu.exec(text)?.[1] ?? "";
@@ -44,10 +60,24 @@ export function auditReleaseWorkflow(text, version) {
     && publishBlock.includes("actions/download-artifact@")
     && !/^ {4}environment:/mu.test(prepareBlock)
   );
+  const hiddenReleaseEvidence = (
+    prepareBlock.includes("path: .evidence/release")
+    && /^ {10}include-hidden-files:\s*true\s*$/mu.test(prepareBlock)
+  );
   const oidcIsolatedToPublish = (
     !/\bid-token:\s*write\b/u.test(topPermissions)
     && !/\bid-token:\s*write\b/u.test(prepareBlock)
     && /^ {6}id-token:\s*write\s*$/mu.test(publishBlock)
+  );
+  const leastPrivilegePermissions = (
+    hasExactPermissions(text, 0, 2, ["contents:read"])
+    && hasExactPermissions(prepareBlock, 4, 6, ["contents:read"])
+    && hasExactPermissions(
+      publishBlock,
+      4,
+      6,
+      ["contents:read", "id-token:write"],
+    )
   );
   const tokenless = (
     !/\b(?:NODE_AUTH_TOKEN|NPM_TOKEN)\b/u.test(text)
@@ -93,7 +123,9 @@ export function auditReleaseWorkflow(text, version) {
     exactTag: tagIsExact ? exactTag : "",
     tagBoundRun,
     reviewableEvidenceBeforePublish,
+    hiddenReleaseEvidence,
     oidcIsolatedToPublish,
+    leastPrivilegePermissions,
     tokenless,
     provenancePublish,
     passed: (
@@ -104,7 +136,9 @@ export function auditReleaseWorkflow(text, version) {
       && tagIsExact
       && tagBoundRun
       && reviewableEvidenceBeforePublish
+      && hiddenReleaseEvidence
       && oidcIsolatedToPublish
+      && leastPrivilegePermissions
       && tokenless
       && actionsPinned
       && provenancePublish
@@ -123,8 +157,14 @@ export function auditReleaseWorkflow(text, version) {
   if (!reviewableEvidenceBeforePublish) {
     failures.push("release evidence must be uploaded before the protected publish job");
   }
+  if (!hiddenReleaseEvidence) {
+    failures.push("release upload must include the hidden .evidence directory");
+  }
   if (!oidcIsolatedToPublish) {
     failures.push("id-token: write must be isolated to the protected publish job");
+  }
+  if (!leastPrivilegePermissions) {
+    failures.push("release permissions must match the exact least-privilege maps");
   }
   if (!tokenless) failures.push("release must not use npm tokens or workflow secrets");
   if (!actionsPinned) failures.push("release actions must use full commit SHAs");

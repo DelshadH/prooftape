@@ -51,7 +51,9 @@ describe("quality-gate evidence output", () => {
       exactTag: "v0.1.0-alpha.1",
       tagBoundRun: true,
       reviewableEvidenceBeforePublish: true,
+      hiddenReleaseEvidence: true,
       oidcIsolatedToPublish: true,
+      leastPrivilegePermissions: true,
       tokenless: true,
       provenancePublish: true,
       passed: true,
@@ -83,9 +85,22 @@ describe("quality-gate evidence output", () => {
         "PROOFTAPE_RELEASE_REF: refs/heads/main",
       ),
       workflow.replace("needs: prepare", "needs: []"),
+      workflow.replace("        include-hidden-files: true\n", ""),
       workflow.replace(
         "permissions:\n  contents: read",
         "permissions:\n  contents: read\n  id-token: write",
+      ),
+      workflow.replace(
+        "permissions:\n  contents: read\n\nenv:",
+        "permissions:\n  contents: read\n  actions: write\n\nenv:",
+      ),
+      workflow.replace(
+        "    permissions:\n      contents: read\n    runs-on:",
+        "    permissions:\n      contents: read\n      packages: write\n    runs-on:",
+      ),
+      workflow.replace(
+        "    permissions:\n      contents: read\n      id-token: write",
+        "    permissions:\n      contents: read\n      id-token: write\n      deployments: write",
       ),
     ];
     for (const candidate of weakened) {
