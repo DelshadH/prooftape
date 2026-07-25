@@ -24,3 +24,6 @@
   same-process code can forge its raw stream; capsules, reports, CLI output, and
   security documentation now state that observation authenticity is not
   established.
+- Refreshed every pinned GitHub Action to its Node 24 runtime and adopted
+  fail-closed artifact digest checks while explicitly disabling cache creation
+  in the untrusted-code workflow.
