@@ -6,8 +6,10 @@ import {
   rm,
   writeFile,
 } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 
 function run(executable, args, options = {}) {
   const result = spawnSync(executable, args, {
@@ -58,6 +60,29 @@ try {
     ["install", "--ignore-scripts", "--no-audit", "--no-fund", ...tarballs],
     { cwd: install },
   );
+  const requireFromInstall = createRequire(join(install, "package.json"));
+  const schemaEntry = requireFromInstall.resolve("@prooftape/schema");
+  const {
+    parseCapsule,
+    parseReport,
+    parseReproductionManifest,
+  } = await import(pathToFileURL(schemaEntry).href);
+  const goldenFormats = [
+    ["capsule-v1.json", parseCapsule, "prooftape-capsule"],
+    ["report-v1.json", parseReport, "prooftape-report"],
+    [
+      "reproduction-manifest-v1.json",
+      parseReproductionManifest,
+      "prooftape-reproduction-manifest",
+    ],
+  ];
+  for (const [filename, parse, expectedKind] of goldenFormats) {
+    const bytes = await readFile(join(repository, "fixtures", "schema", filename));
+    const parsed = parse(bytes);
+    if (parsed.kind !== expectedKind) {
+      throw new Error(`packed schema rejected ${filename}`);
+    }
+  }
   const cli = join(install, "node_modules", "prooftape", "dist", "cli.js");
   const help = run(process.execPath, [cli, "--help"], { cwd: install });
   if (!help.includes("prooftape compare")) throw new Error("packed CLI help smoke failed");

@@ -4,8 +4,11 @@ import {
   CAPSULE_LIMITS,
   EXIT,
   parseCapsule,
+  parseReproductionManifest,
   parseReport,
+  REPRODUCTION_MANIFEST_LIMITS,
   type CapsuleV1,
+  type ReproductionManifestV1,
   type ReportV1,
 } from "../src/index.js";
 
@@ -207,5 +210,102 @@ describe("parseReport", () => {
     }))).toThrow(
       /observationAuthenticity/,
     );
+    const {
+      observationAuthenticity: _candidateAuthenticity,
+      ...unmarkedCandidate
+    } = report.candidate;
+    expect(() => parseReport(JSON.stringify({
+      ...report,
+      candidate: unmarkedCandidate,
+    }))).toThrow(/observationAuthenticity/);
+    expect(() => parseReport(JSON.stringify({
+      ...report,
+      baseline: {
+        ...report.baseline,
+        observationAuthenticity: "established",
+      },
+    }))).toThrow(/observationAuthenticity/);
+  });
+});
+
+const reproductionManifest: ReproductionManifestV1 = {
+  schemaVersion: "1",
+  kind: "prooftape-reproduction-manifest",
+  observationAuthenticity: "not-established",
+  matchKey: "fixture:parse:test.mjs:test:1",
+  files: {
+    "README.md": "1".repeat(64),
+    "base-package.json": "2".repeat(64),
+    "candidate-package.json": "3".repeat(64),
+    "input.json": "4".repeat(64),
+    "repro.mjs": "5".repeat(64),
+  },
+};
+
+describe("parseReproductionManifest", () => {
+  it("parses the committed version 1 golden reproduction manifest", () => {
+    const golden = readFileSync(
+      new URL(
+        "../../../fixtures/schema/reproduction-manifest-v1.json",
+        import.meta.url,
+      ),
+      "utf8",
+    );
+    expect(parseReproductionManifest(golden)).toEqual(reproductionManifest);
+  });
+
+  it("rejects future versions, unknown fields, and incompatible file sets", () => {
+    expect(() => parseReproductionManifest(JSON.stringify({
+      ...reproductionManifest,
+      schemaVersion: "2",
+    }))).toThrow(/schemaVersion/);
+    expect(() => parseReproductionManifest(JSON.stringify({
+      ...reproductionManifest,
+      injected: true,
+    }))).toThrow(/unknown field/);
+    expect(() => parseReproductionManifest(JSON.stringify({
+      ...reproductionManifest,
+      files: {
+        ...reproductionManifest.files,
+        "extra.json": "6".repeat(64),
+      },
+    }))).toThrow(/unknown field/);
+    const {
+      "README.md": _readmeHash,
+      ...missingReadme
+    } = reproductionManifest.files;
+    expect(() => parseReproductionManifest(JSON.stringify({
+      ...reproductionManifest,
+      files: missingReadme,
+    }))).toThrow(/missing field/);
+  });
+
+  it("requires the observation-authenticity limitation", () => {
+    const {
+      observationAuthenticity: _authenticity,
+      ...unmarked
+    } = reproductionManifest;
+    expect(() => parseReproductionManifest(JSON.stringify(unmarked))).toThrow(
+      /observationAuthenticity/,
+    );
+    expect(() => parseReproductionManifest(JSON.stringify({
+      ...reproductionManifest,
+      observationAuthenticity: "established",
+    }))).toThrow(/observationAuthenticity/);
+  });
+
+  it("rejects malformed, oversized, and non-SHA-256 input", () => {
+    expect(() => parseReproductionManifest("{")).toThrow(/invalid JSON/);
+    expect(() => parseReproductionManifest(JSON.stringify({
+      ...reproductionManifest,
+      matchKey: "x".repeat(REPRODUCTION_MANIFEST_LIMITS.maxBytes),
+    }))).toThrow(/byte limit/);
+    expect(() => parseReproductionManifest(JSON.stringify({
+      ...reproductionManifest,
+      files: {
+        ...reproductionManifest.files,
+        "README.md": "A".repeat(64),
+      },
+    }))).toThrow(/SHA-256/);
   });
 });

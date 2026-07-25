@@ -10,6 +10,11 @@ artifacts without the marker are intentionally rejected rather than silently
 upgraded, so an absent trust boundary cannot be mistaken for
 observation-authenticated evidence.
 
+The capsule, report, and reproduction-manifest shapes become the stable public
+version 1 contract with the first published alpha. See
+[the compatibility policy](schema-compatibility.md) for the exact promise,
+version-bump rules, golden fixtures, and hash scopes.
+
 ## Capsule
 
 A capsule has:
