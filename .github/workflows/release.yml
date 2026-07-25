@@ -91,6 +91,7 @@ jobs:
           name: prooftape-0.1.0-alpha.1-release-evidence
           path: .evidence/release
           if-no-files-found: error
+          include-hidden-files: true
           retention-days: 30
           compression-level: 0
 

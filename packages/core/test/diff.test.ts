@@ -71,6 +71,15 @@ describe("diffCalls", () => {
     ]);
   });
 
+  it("uses dependency identity when matching calls", () => {
+    const candidate = { ...base, dependency: "different-package" };
+
+    expect(diffCalls([base], [candidate]).map((item) => item.kind)).toEqual([
+      "added-call",
+      "removed-call",
+    ]);
+  });
+
   it("reports a relative sequence change once", () => {
     const second = { ...base, callId: "p1:2", sequence: 2, exportPath: "second" };
     const candidateFirst = { ...second, callId: "p1:1", sequence: 1 };

@@ -12,6 +12,14 @@ import {
   type ReportV1,
 } from "../src/index.js";
 
+function invalidUtf8(value: unknown, marker: string): Uint8Array {
+  const bytes = Buffer.from(JSON.stringify(value));
+  const index = bytes.indexOf(marker);
+  if (index < 0) throw new Error(`test marker ${JSON.stringify(marker)} was not found`);
+  bytes[index] = 0xff;
+  return bytes;
+}
+
 describe("public exit contract", () => {
   it("does not overlap conventional success", () => {
     expect(EXIT.OK).toBe(0);
@@ -69,6 +77,12 @@ describe("parseCapsule", () => {
     expect(parseCapsule(JSON.stringify(capsule))).toEqual(capsule);
   });
 
+  it("rejects malformed UTF-8 bytes", () => {
+    expect(() => parseCapsule(invalidUtf8(capsule, "v22.22.0"))).toThrow(
+      /invalid UTF-8/,
+    );
+  });
+
   it("rejects unknown versions and unknown fields", () => {
     expect(() =>
       parseCapsule(JSON.stringify({ ...capsule, schemaVersion: "2" })),
@@ -84,6 +98,17 @@ describe("parseCapsule", () => {
       calls: [{ ...capsule.calls[0], outcome: "throw", value: undefined }],
     };
     expect(() => parseCapsule(JSON.stringify(malformed))).toThrow(/error/);
+  });
+
+  it("rejects calls for a dependency other than the capsule dependency", () => {
+    const mismatched = {
+      ...capsule,
+      calls: [{ ...capsule.calls[0], dependency: "different-package" }],
+    };
+
+    expect(() => parseCapsule(JSON.stringify(mismatched))).toThrow(
+      /calls\/0\/dependency.*metadata dependency/,
+    );
   });
 
   it("rejects capsules beyond the event limit", () => {
@@ -171,6 +196,12 @@ describe("parseReport", () => {
     expect(parseReport(JSON.stringify(report))).toEqual(report);
   });
 
+  it("rejects malformed UTF-8 bytes", () => {
+    expect(() => parseReport(invalidUtf8(report, "parse changed return value"))).toThrow(
+      /invalid UTF-8/,
+    );
+  });
+
   it("rejects incompatible versions, unknown fields, and inconsistent counts", () => {
     expect(() => parseReport(JSON.stringify({ ...report, schemaVersion: "2" }))).toThrow(
       /schemaVersion/,
@@ -252,6 +283,12 @@ describe("parseReproductionManifest", () => {
       "utf8",
     );
     expect(parseReproductionManifest(golden)).toEqual(reproductionManifest);
+  });
+
+  it("rejects malformed UTF-8 bytes", () => {
+    expect(() =>
+      parseReproductionManifest(invalidUtf8(reproductionManifest, "fixture:parse")),
+    ).toThrow(/invalid UTF-8/);
   });
 
   it("rejects future versions, unknown fields, and incompatible file sets", () => {

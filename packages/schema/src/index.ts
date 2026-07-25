@@ -168,6 +168,27 @@ function fail(path: string, message: string): never {
   throw new SchemaValidationError(`${path}: ${message}`);
 }
 
+function decodeInput(
+  input: string | Uint8Array,
+  maxBytes: number,
+  label: string,
+): string {
+  if (typeof input === "string") {
+    if (Buffer.byteLength(input, "utf8") > maxBytes) {
+      fail("/", `${label} byte limit exceeded`);
+    }
+    return input;
+  }
+  if (input.byteLength > maxBytes) {
+    fail("/", `${label} byte limit exceeded`);
+  }
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(input);
+  } catch {
+    fail("/", "invalid UTF-8");
+  }
+}
+
 function record(value: unknown, path: string): Record<string, unknown> {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     fail(path, "expected object");
@@ -485,10 +506,7 @@ function parseIssue(value: unknown, path: string): CaptureIssueV1 {
 }
 
 export function parseCapsule(input: string | Uint8Array): CapsuleV1 {
-  const text = typeof input === "string" ? input : new TextDecoder().decode(input);
-  if (Buffer.byteLength(text, "utf8") > CAPSULE_LIMITS.maxBytes) {
-    fail("/", "capsule byte limit exceeded");
-  }
+  const text = decodeInput(input, CAPSULE_LIMITS.maxBytes, "capsule");
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
@@ -508,11 +526,21 @@ export function parseCapsule(input: string | Uint8Array): CapsuleV1 {
   if (object.calls.length > CAPSULE_LIMITS.maxCalls) fail("/calls", "call limit exceeded");
   if (!Array.isArray(object.issues)) fail("/issues", "expected array");
   if (object.issues.length > CAPSULE_LIMITS.maxIssues) fail("/issues", "issue limit exceeded");
+  const metadata = parseMetadata(object.metadata, "/metadata");
+  const calls = object.calls.map((call, index) => parseCall(call, `/calls/${index}`));
+  for (const [index, call] of calls.entries()) {
+    if (call.dependency !== metadata.dependency.name) {
+      fail(
+        `/calls/${index}/dependency`,
+        "does not match the capsule metadata dependency",
+      );
+    }
+  }
   return {
     schemaVersion: "1",
     kind: "prooftape-capsule",
-    metadata: parseMetadata(object.metadata, "/metadata"),
-    calls: object.calls.map((call, index) => parseCall(call, `/calls/${index}`)),
+    metadata,
+    calls,
     issues: object.issues.map((issue, index) => parseIssue(issue, `/issues/${index}`)),
   };
 }
@@ -629,10 +657,7 @@ function parseReproduction(value: unknown, path: string): ReproductionEvidenceV1
 }
 
 export function parseReport(input: string | Uint8Array): ReportV1 {
-  const text = typeof input === "string" ? input : new TextDecoder().decode(input);
-  if (Buffer.byteLength(text, "utf8") > REPORT_LIMITS.maxBytes) {
-    fail("/", "report byte limit exceeded");
-  }
+  const text = decodeInput(input, REPORT_LIMITS.maxBytes, "report");
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
@@ -725,10 +750,11 @@ export function parseReport(input: string | Uint8Array): ReportV1 {
 export function parseReproductionManifest(
   input: string | Uint8Array,
 ): ReproductionManifestV1 {
-  const text = typeof input === "string" ? input : new TextDecoder().decode(input);
-  if (Buffer.byteLength(text, "utf8") > REPRODUCTION_MANIFEST_LIMITS.maxBytes) {
-    fail("/", "reproduction manifest byte limit exceeded");
-  }
+  const text = decodeInput(
+    input,
+    REPRODUCTION_MANIFEST_LIMITS.maxBytes,
+    "reproduction manifest",
+  );
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
