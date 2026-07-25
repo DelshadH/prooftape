@@ -29,7 +29,13 @@ describe("performance gate", () => {
         },
       );
 
-      expect(result.status, result.stderr).toBe(0);
+      expect([0, 1]).toContain(result.status);
+      expect(result.stderr).toBe("");
+      expect(JSON.parse(result.stdout)).toMatchObject({
+        schemaVersion: "1",
+        kind: "prooftape-performance-report",
+        passed: expect.any(Boolean),
+      });
       await expect(readdir(temporaryRoot)).resolves.toEqual([]);
     } finally {
       await rm(temporaryRoot, { recursive: true, force: true });

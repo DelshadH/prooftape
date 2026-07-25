@@ -28,6 +28,7 @@ jobs:
       - run: npm run build
       - run: npm audit --audit-level=high
       - run: npm run smoke:package
+      - run: npm run performance
 
   quality-gates:
     runs-on: ubuntu-latest
