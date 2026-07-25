@@ -1,6 +1,6 @@
 {
   "name": "prooftape",
-  "version": "0.0.0",
+  "version": "0.1.0-alpha.1",
   "description": "Compare observed npm dependency behavior across exact Git revisions",
   "type": "module",
   "bin": {
@@ -19,9 +19,9 @@
     "directory": "packages/cli"
   },
   "dependencies": {
-    "@prooftape/core": "0.0.0",
-    "@prooftape/hook": "0.0.0",
-    "@prooftape/schema": "0.0.0"
+    "@prooftape/core": "0.1.0-alpha.1",
+    "@prooftape/hook": "0.1.0-alpha.1",
+    "@prooftape/schema": "0.1.0-alpha.1"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",

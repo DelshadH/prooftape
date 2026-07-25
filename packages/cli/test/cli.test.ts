@@ -59,6 +59,17 @@ function output() {
 }
 
 describe("runCli", () => {
+  it("prints the exact alpha package version", async () => {
+    const version = output();
+
+    expect(await runCli(["--version"], { cwd: process.cwd(), ...version.io }))
+      .toBe(0);
+    expect(version.read()).toEqual({
+      stdout: "0.1.0-alpha.1\n",
+      stderr: "",
+    });
+  });
+
   it("prints help and rejects unknown commands with the public exit contract", async () => {
     const help = output();
     expect(await runCli(["--help"], { cwd: process.cwd(), ...help.io })).toBe(0);
