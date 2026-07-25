@@ -51,7 +51,10 @@ PT-G07 now requires all of the following:
    documentation states the limitation;
 7. successful record/diff/compare output warns that code under test can suppress
    or forge calls;
-8. GitHub job hashes are documented only as artifact-transport integrity.
+8. an end-to-end comparison proves a real candidate value can be forged to the
+   base value, producing exit 0 only alongside the authenticity warning and
+   both report markers;
+9. GitHub job hashes are documented only as artifact-transport integrity.
 
 This is an explicit reduction in assurance, not a substitute control. A future
 stronger gate would require a collector outside candidate OS authority and a new
@@ -82,7 +85,7 @@ A hand-edited screenshot is not evidence.
 | PT-G04 | `npm run demo` executes both green commands, returns ProofTape exit 2, and verifies the same report/reproduction match key. |
 | PT-G05 | Runtime, diff, report, and compare tests cover mutation, rejection, insertion, deletion, sequence, and ambiguous repeats. |
 | PT-G06 | `packages/core/test/normalize.test.ts` proves declared-only UUID, timestamp, and path normalization with an audit record per field. |
-| PT-G07 | `packages/core/test/compare.test.ts` protects held base evidence and detects checkout changes; `record.test.ts` executes a raw-stream forgery; schema, reproduction, and CLI tests require the machine-readable authenticity marker, generated warning, and terminal warning; `.github/workflows/prooftape.yml` separates jobs and binds artifact transport to producing-job hashes without claiming observation authorship. |
+| PT-G07 | `packages/core/test/compare.test.ts` protects held base evidence and detects checkout changes; `record.test.ts` executes a raw-stream forgery; `packages/cli/test/adversarial-compare.test.ts` proves a genuine A-to-B behavior change can be forged into a warned exit-0 result; schema, reproduction, and CLI tests require the machine-readable authenticity marker, generated warning, and terminal warning; `.github/workflows/prooftape.yml` separates jobs and binds artifact transport to producing-job hashes without claiming observation authorship. |
 | PT-G08 | `npm run real-upgrades` builds isolated Git histories from six committed lockfiles and tests `camelcase`, `is-number`, and `ms`. |
 | PT-G09 | `npm run security` combines npm audit, license allowlist, production-install-script check, tracked-source secret scan, and workflow policy scan. |
 | PT-G11 | `npm run performance` records seven raw sample pairs, environment, medians, and the enforced 2.0× budget. |
