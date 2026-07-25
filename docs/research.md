@@ -8,7 +8,7 @@ These sources were re-checked on 2026-07-24.
   `require`, and `createRequire`.
 - [GitHub secure use reference](https://docs.github.com/en/actions/reference/security/secure-use)
   treats pull-request contexts as untrusted and recommends least-privilege
-  tokens and immutable Action references.
+  tokens and full-commit Action references.
 - [GitHub reusable workflow documentation](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows)
   documents `workflow_call`, permission downgrading, and full commit SHAs as the
   safest reusable-workflow reference.

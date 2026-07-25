@@ -8,7 +8,8 @@ report. A small synthetic reproduction is preferred.
 High-priority areas include:
 
 - captured secrets reaching files, logs, errors, or artifacts;
-- a candidate branch replacing or influencing the trusted baseline;
+- a candidate branch replacing or influencing the protected base revision or
+  retained base capsule;
 - path traversal, archive expansion, or unbounded input;
 - unintended privileged execution in GitHub Actions;
 - instrumentation changing supported program behavior.
@@ -18,4 +19,5 @@ comparisons only in disposable repositories without credentials. For hostile
 pull requests, use the separate-job workflow described in
 `docs/github.md` on an ephemeral hosted runner to protect the host and base
 artifact. That workflow does not authenticate candidate observations against
-candidate code; see `docs/security-model.md`.
+candidate code. Its Action output and job summary state that limitation
+explicitly; see `docs/security-model.md`.

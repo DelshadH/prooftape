@@ -45,6 +45,9 @@ is explicitly not a protected asset in version 1.
 - Capsules and reports require
   `observationAuthenticity: "not-established"`, and the CLI warns on every
   successful record or comparison.
+- The composite Action exposes `observation-authenticity=not-established`.
+  The verifier summary repeats the limitation beside separately labeled
+  canonical capsule and artifact transport hashes.
 - ESM, CJS, child-process, worker-thread, mutation, rejection, error-identity,
   descriptor, and `this` fixtures compare instrumented and plain results.
 - Dependency audit, license allowlist, tracked-source secret scan, workflow

@@ -161,14 +161,14 @@ export async function compareRevisions(
       try {
         git(cwd, ["worktree", "remove", "--force", candidateDirectory]);
       } catch {
-        // The verified temporary directory cleanup below is the final fallback.
+        // The prefix-checked temporary directory cleanup below is the final fallback.
       }
     }
     if (baseAdded) {
       try {
         git(cwd, ["worktree", "remove", "--force", baseDirectory]);
       } catch {
-        // The verified temporary directory cleanup below is the final fallback.
+        // The prefix-checked temporary directory cleanup below is the final fallback.
       }
     }
     await removeCompareDirectory(worktreeRoot);

@@ -63,7 +63,7 @@ async function installedFixture(value: string): Promise<string> {
 }
 
 describe("generateReproduction", () => {
-  it("creates a manifest-verified replay that matches base and fails candidate", async () => {
+  it("creates a versioned reproduction that matches base and fails candidate", async () => {
     const base = capsule("before", "1.0.0", "a");
     const candidate = capsule("after", "2.0.0", "e");
     const report = buildReport(base, candidate);

@@ -99,8 +99,15 @@ They have only `contents: read`, receive no secrets, use no dependency cache,
 disable npm lifecycle scripts, and never use `pull_request_target`.
 
 Each recording job publishes a capsule plus its SHA-256 as a job output. The
-verifier downloads the two immutable-name artifacts, checks those hashes,
-strictly parses both capsules, emits the report/reproduction artifact, and then
-enforces the public exit code. This isolates the base artifact and authenticates
-transport from each producing job. It does not authenticate calls emitted by
-code inside the candidate job.
+verifier downloads the two unique-name artifacts, checks that their complete
+bytes match the hashes supplied through the producing-job outputs, strictly
+parses both capsule structures, emits the report/reproduction artifact, and
+then enforces the public exit code. This isolates the base artifact and detects
+transport changes after each job produces its capsule. It does not authenticate
+calls emitted by code inside the candidate job.
+
+The verifier writes a GitHub step summary from the strictly parsed report. It
+shows exact commits, dependency versions, canonical capsule hashes, complete
+artifact transport hashes, verdict, and exit code. The summary distinguishes
+base retention, transport-hash matching, structural parsing, observation
+comparison, and the absence of observation authorship.

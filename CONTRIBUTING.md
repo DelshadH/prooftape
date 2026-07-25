@@ -4,9 +4,9 @@ Read `docs/product.md`, `docs/security-model.md`, `docs/architecture.md`, and
 `docs/quality-plan.md` before changing a public boundary.
 
 Keep changes narrow and start behavioral work with a failing fixture. Changes
-to interception, canonical data, baseline integrity, redaction, workflow
-permissions, resource limits, or exit codes need a test that exercises the real
-CLI or hook.
+to interception, canonical data, held-base capsule integrity, redaction,
+workflow permissions, resource limits, or exit codes need a test that exercises
+the real CLI or hook.
 
 Run the same checks used for a release:
 

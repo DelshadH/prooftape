@@ -7,8 +7,8 @@ instead of guessing forward compatibility.
 Pre-release amendment: the required `observationAuthenticity` marker was added
 while every package was still unpublished at `0.0.0`. Earlier development
 artifacts without the marker are intentionally rejected rather than silently
-upgraded, so an absent trust boundary cannot be mistaken for authenticated
-evidence.
+upgraded, so an absent trust boundary cannot be mistaken for
+observation-authenticated evidence.
 
 ## Capsule
 
@@ -72,3 +72,12 @@ the same limitation.
 Hashes detect byte changes after production. They do not prove that code under
 test did not suppress or forge the in-process observations before the capsule
 was produced.
+
+## Action and workflow presentation
+
+The composite Action exposes the literal output
+`observation-authenticity=not-established` in addition to the capsule path and
+complete-file transport hash. The reusable workflow summary shows both
+canonical capsule hashes and complete artifact transport hashes with distinct
+labels. Neither output changes the version-1 JSON schemas or establishes
+observation authorship.

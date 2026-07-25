@@ -1,13 +1,19 @@
 import { createHash } from "node:crypto";
-import { readFile, realpath, writeFile } from "node:fs/promises";
+import {
+  appendFile,
+  readFile,
+  realpath,
+  writeFile,
+} from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { renderWorkflowSummary } from "./workflow-summary.mjs";
 
 const toolRoot = resolve(import.meta.dirname, "..");
 const { runCli } = await import(
   pathToFileURL(resolve(toolRoot, "packages/cli/dist/main.js")).href
 );
-const { parseCapsule } = await import(
+const { parseCapsule, parseReport } = await import(
   pathToFileURL(resolve(toolRoot, "packages/schema/dist/index.js")).href
 );
 
@@ -48,6 +54,20 @@ const exitCode = await runCli([
   stderr: (value) => process.stderr.write(value),
 });
 if (![0, 2, 3, 4].includes(exitCode)) throw new Error("CLI returned an unknown exit code");
+if (exitCode === 0 || exitCode === 2) {
+  const report = parseReport(await readFile(resolve(directory, "report.json")));
+  const summaryPath = process.env.GITHUB_STEP_SUMMARY;
+  if (summaryPath) {
+    await appendFile(
+      summaryPath,
+      renderWorkflowSummary(report, exitCode, {
+        baseArtifactSha256: inputs[0][1],
+        candidateArtifactSha256: inputs[1][1],
+      }),
+      "utf8",
+    );
+  }
+}
 await writeFile(resolve(directory, "exit-code.txt"), `${exitCode}\n`, {
   flag: "wx",
   mode: 0o600,
