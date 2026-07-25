@@ -1,7 +1,7 @@
 {
   "name": "prooftape-workspace",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0-alpha.1",
   "type": "module",
   "engines": {
     "node": ">=22.15.0"
@@ -16,6 +16,7 @@
     "test": "npm run build && vitest run",
     "check": "npm run typecheck && npm test",
     "smoke:package": "node scripts/package-smoke.mjs",
+    "release:prepare": "node scripts/release-pack.mjs --out .evidence/release --replace",
     "demo": "npm run build && node scripts/killer-demo.mjs",
     "demo:record": "npm run build && node scripts/killer-demo.mjs --record .evidence/killer-demo.cast --replace",
     "performance": "npm run build && node scripts/performance-gate.mjs --out .evidence/performance.json --replace",
