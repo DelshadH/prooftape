@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { auditReleaseWorkflow } from "./release-workflow-policy.mjs";
 
 const repository = resolve(import.meta.dirname, "..");
 const identifier = randomUUID();
@@ -35,6 +36,58 @@ function runAudit(outputArgument: string, replace = false) {
 }
 
 describe("quality-gate evidence output", () => {
+  it("requires a protected tokenless OIDC release workflow", async () => {
+    const result = runAudit(output, true);
+    expect(result.status, result.stderr).toBe(0);
+
+    const report = JSON.parse(await readFile(outputPath, "utf8"));
+    expect(report.releaseWorkflow).toEqual({
+      path: ".github/workflows/release.yml",
+      version: "0.1.0-alpha.1",
+      manualDispatch: true,
+      contentsRead: true,
+      oidc: true,
+      protectedEnvironment: "npm-release",
+      exactTag: "v0.1.0-alpha.1",
+      tokenless: true,
+      provenancePublish: true,
+      passed: true,
+    });
+  });
+
+  it("fails closed for weakened release identity, permissions, pins, or auth", async () => {
+    const workflow = await readFile(
+      resolve(repository, ".github/workflows/release.yml"),
+      "utf8",
+    );
+    expect(auditReleaseWorkflow(workflow, "0.1.0-alpha.1").report.passed)
+      .toBe(true);
+
+    const weakened = [
+      workflow.replace("id-token: write", "id-token: read"),
+      `${workflow}\nenv:\n  NODE_AUTH_TOKEN: forbidden\n`,
+      workflow.replace(
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+        "actions/checkout@v7",
+      ),
+      workflow.replace(
+        "default: v0.1.0-alpha.1",
+        "default: v0.1.0-alpha.2",
+      ),
+      workflow.replace("ref: ${{ inputs.tag }}", "ref: main"),
+    ];
+    for (const candidate of weakened) {
+      expect(auditReleaseWorkflow(candidate, "0.1.0-alpha.1").report.passed)
+        .toBe(false);
+    }
+
+    const releasing = await readFile(resolve(repository, "RELEASING.md"), "utf8");
+    expect(releasing).toContain(
+      "Publishing from a developer workstation is prohibited.",
+    );
+    expect(releasing).not.toMatch(/^\s*npm publish\b/mu);
+  });
+
   it("replaces stale evidence when a fixed-path gate is rerun", async () => {
     const first = runAudit(output, true);
     expect(first.status, first.stderr).toBe(0);

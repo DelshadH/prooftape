@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { checkedEvidenceOutput, writeEvidence } from "./evidence-output.mjs";
+import { auditReleaseWorkflow } from "./release-workflow-policy.mjs";
 
 const root = process.cwd();
 const allowedLicenses = new Set(["Apache-2.0", "BSD-3-Clause", "ISC", "MIT"]);
@@ -51,6 +52,7 @@ for (const [path, metadata] of packageEntries) {
 
 let scannedBytes = 0;
 let workflowCount = 0;
+let releaseWorkflowText = "";
 for (const file of trackedFiles()) {
   const bytes = await readFile(resolve(root, file));
   scannedBytes += bytes.length;
@@ -63,6 +65,9 @@ for (const file of trackedFiles()) {
   }
   if (/^\.github\/workflows\/[^/]+\.ya?ml$/u.test(file.replaceAll("\\", "/"))) {
     workflowCount += 1;
+    if (file.replaceAll("\\", "/") === ".github/workflows/release.yml") {
+      releaseWorkflowText = text;
+    }
     if (/\bpull_request_target\s*:/u.test(text)) {
       failures.push(`${file}: pull_request_target is forbidden`);
     }
@@ -76,12 +81,32 @@ for (const file of trackedFiles()) {
       failures.push(`${file}: persisted checkout credentials are forbidden`);
     }
     for (const line of text.split(/\r?\n/u)) {
-      const match = /^\s*-\s+uses:\s+\S+@(\S+)/u.exec(line);
+      const match = /^\s*(?:-\s+)?uses:\s+\S+@(\S+)/u.exec(line);
       if (match && !/^[a-f0-9]{40}$/u.test(match[1])) {
         failures.push(`${file}: action is not pinned to a full commit SHA`);
       }
     }
   }
+}
+
+const version = lock.packages?.[""]?.version;
+if (typeof version !== "string") throw new Error("workspace version is missing");
+const releaseWorkflowAudit = auditReleaseWorkflow(releaseWorkflowText, version);
+for (const failure of releaseWorkflowAudit.failures) {
+  failures.push(`.github/workflows/release.yml: ${failure}`);
+}
+
+let releasingText = "";
+try {
+  releasingText = await readFile(resolve(root, "RELEASING.md"), "utf8");
+} catch (error) {
+  if (error?.code !== "ENOENT") throw error;
+}
+if (!releasingText.includes("Publishing from a developer workstation is prohibited.")) {
+  failures.push("RELEASING.md: developer-workstation publishing must be prohibited");
+}
+if (/^\s*npm publish\b/mu.test(releasingText)) {
+  failures.push("RELEASING.md: direct npm publish commands are forbidden");
 }
 
 const report = {
@@ -93,6 +118,7 @@ const report = {
   trackedFilesScanned: trackedFiles().length,
   trackedBytesScanned: scannedBytes,
   workflowsScanned: workflowCount,
+  releaseWorkflow: releaseWorkflowAudit.report,
   failures,
   passed: failures.length === 0,
 };
