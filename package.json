@@ -17,10 +17,10 @@
     "check": "npm run typecheck && npm test",
     "smoke:package": "node scripts/package-smoke.mjs",
     "demo": "npm run build && node scripts/killer-demo.mjs",
-    "demo:record": "npm run build && node scripts/killer-demo.mjs --record .evidence/killer-demo.cast",
-    "performance": "npm run build && node scripts/performance-gate.mjs --out .evidence/performance.json",
-    "security": "npm audit --audit-level=high && node scripts/security-audit.mjs --out .evidence/security.json",
-    "real-upgrades": "npm run build && node scripts/real-upgrade-gates.mjs --out .evidence/real-upgrades.json"
+    "demo:record": "npm run build && node scripts/killer-demo.mjs --record .evidence/killer-demo.cast --replace",
+    "performance": "npm run build && node scripts/performance-gate.mjs --out .evidence/performance.json --replace",
+    "security": "npm audit --audit-level=high && node scripts/security-audit.mjs --out .evidence/security.json --replace",
+    "real-upgrades": "npm run build && node scripts/real-upgrade-gates.mjs --out .evidence/real-upgrades.json --replace"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

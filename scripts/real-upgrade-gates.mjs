@@ -1,8 +1,9 @@
 import { spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
+import { checkedEvidenceOutput, writeEvidence } from "./evidence-output.mjs";
 
 const root = process.cwd();
 const { canonicalJson, compareRevisions } = await import(
@@ -55,19 +56,6 @@ function git(cwd, args) {
     throw new Error(`fixture Git command failed: ${args[0]}`);
   }
   return result.stdout.trim();
-}
-
-function checkedOutputPath(args) {
-  const index = args.indexOf("--out");
-  if (index === -1) return undefined;
-  const value = args[index + 1];
-  if (!value || isAbsolute(value) || value.includes("\0")) {
-    throw new Error("--out must be a relative path");
-  }
-  const target = resolve(root, value);
-  const path = relative(root, target);
-  if (path.startsWith("..") || isAbsolute(path)) throw new Error("--out escapes the repository");
-  return target;
 }
 
 async function installRevision(fixtureRoot, revision, repository) {
@@ -170,9 +158,12 @@ const report = {
   fixtures: results,
   passed: results.length === fixtures.length,
 };
-const outputPath = checkedOutputPath(process.argv.slice(2));
-if (outputPath) {
-  await mkdir(dirname(outputPath), { recursive: true });
-  await writeFile(outputPath, `${JSON.stringify(report, null, 2)}\n`, { flag: "wx", mode: 0o600 });
+const output = checkedEvidenceOutput(root, process.argv.slice(2));
+if (output) {
+  await writeEvidence(
+    output.outputPath,
+    `${JSON.stringify(report, null, 2)}\n`,
+    output.replaceExisting,
+  );
 }
 process.stdout.write(`${JSON.stringify(report)}\n`);

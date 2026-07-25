@@ -18,3 +18,5 @@
 - Added a composite recording Action and a three-job reusable GitHub workflow
   with read-only permissions, no secrets or caches, immutable tool/action pins,
   capsule hashes, and a separate strict verifier.
+- Made fixed-path release evidence safely rerunnable inside `.evidence` while
+  keeping other outputs create-only, and clean up performance-gate observations.

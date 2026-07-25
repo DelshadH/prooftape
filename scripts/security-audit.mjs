@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, isAbsolute, relative, resolve } from "node:path";
+import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
+import { checkedEvidenceOutput, writeEvidence } from "./evidence-output.mjs";
 
 const root = process.cwd();
 const allowedLicenses = new Set(["Apache-2.0", "BSD-3-Clause", "ISC", "MIT"]);
@@ -10,19 +11,6 @@ const secretPatterns = [
   ["Slack token", /\bxox[baprs]-[A-Za-z0-9-]{10,}\b/gu],
   ["private key", /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/gu],
 ];
-
-function checkedOutputPath(args) {
-  const index = args.indexOf("--out");
-  if (index === -1) return undefined;
-  const value = args[index + 1];
-  if (!value || isAbsolute(value) || value.includes("\0")) {
-    throw new Error("--out must be a relative path");
-  }
-  const target = resolve(root, value);
-  const path = relative(root, target);
-  if (path.startsWith("..") || isAbsolute(path)) throw new Error("--out escapes the repository");
-  return target;
-}
 
 function trackedFiles() {
   const result = spawnSync(
@@ -108,10 +96,13 @@ const report = {
   failures,
   passed: failures.length === 0,
 };
-const outputPath = checkedOutputPath(process.argv.slice(2));
-if (outputPath) {
-  await mkdir(dirname(outputPath), { recursive: true });
-  await writeFile(outputPath, `${JSON.stringify(report, null, 2)}\n`, { flag: "wx", mode: 0o600 });
+const output = checkedEvidenceOutput(root, process.argv.slice(2));
+if (output) {
+  await writeEvidence(
+    output.outputPath,
+    `${JSON.stringify(report, null, 2)}\n`,
+    output.replaceExisting,
+  );
 }
 process.stdout.write(`${JSON.stringify(report)}\n`);
 if (!report.passed) process.exitCode = 1;

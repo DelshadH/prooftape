@@ -83,7 +83,8 @@ npm run security
 The demo shows green base and candidate tests, one blocking change, and the same
 counterexample in `report.json` and `repro.mjs`. The real-upgrade gate covers
 locked `camelcase`, `is-number`, and `ms` upgrades. CI runs the supported Node
-22 and 24 matrix.
+22 and 24 matrix. Repeated release-gate runs safely replace their own prior
+files inside `.evidence`; other explicit output paths remain create-only.
 
 The JSON format is documented in [docs/formats.md](docs/formats.md), the
 security boundary in [docs/security-model.md](docs/security-model.md), and every

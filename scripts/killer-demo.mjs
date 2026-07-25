@@ -7,7 +7,8 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { join, relative, resolve } from "node:path";
+import { checkedEvidenceOutput, writeEvidence } from "./evidence-output.mjs";
 
 function execute(executable, args, options = {}) {
   return spawnSync(executable, args, {
@@ -203,18 +204,12 @@ try {
   }
   show("6. Generated repro: matches base; report.json names the same counterexample");
 
-  const recordIndex = process.argv.indexOf("--record");
-  if (recordIndex >= 0) {
-    const requested = process.argv[recordIndex + 1];
-    if (!requested) throw new Error("--record requires a relative output path");
-    const output = resolve(repository, requested);
-    if (
-      isAbsolute(requested)
-      || relative(repository, output).startsWith("..")
-    ) {
-      throw new Error("recording output must stay inside the ProofTape repository");
-    }
-    await mkdir(dirname(output), { recursive: true });
+  const recording = checkedEvidenceOutput(
+    repository,
+    process.argv.slice(2),
+    "--record",
+  );
+  if (recording) {
     const header = JSON.stringify({
       version: 2,
       width: 100,
@@ -229,8 +224,14 @@ try {
         `${line}\r\n`,
       ])
     );
-    await writeFile(output, `${[header, ...events].join("\n")}\n`, { flag: "wx" });
-    process.stdout.write(`Recording written to ${relative(repository, output)} (15.5 seconds).\n`);
+    await writeEvidence(
+      recording.outputPath,
+      `${[header, ...events].join("\n")}\n`,
+      recording.replaceExisting,
+    );
+    process.stdout.write(
+      `Recording written to ${relative(repository, recording.outputPath)} (15.5 seconds).\n`,
+    );
   }
 } finally {
   if (baseReplayAdded) {
