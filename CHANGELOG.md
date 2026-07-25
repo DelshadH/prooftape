@@ -40,3 +40,7 @@
   separates base retention, capsule-structure validation, canonical capsule
   hashes, artifact transport hashes, observation comparison, and unsupported
   observation authorship.
+- Added an independent public consumer repository that installs the packed
+  alpha packages, keeps ordinary tests green across a real `camelcase` upgrade,
+  and exercises the pinned reusable workflow, report, reproduction, exit code,
+  and authenticity warning.

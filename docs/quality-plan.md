@@ -21,6 +21,20 @@ claim.
 | PT-G11 | Performance budget | Median wall-clock overhead is ≤2.0× on the published synthetic fixture; report includes raw samples and environment. This is a budget, not a universal claim. |
 | PT-G12 | Clean-room release | Linux clean checkout runs install, full tests, killer demo, package smoke test, and generated 15–20 second terminal recording from one command. |
 
+## Independent consumer acceptance
+
+The public
+[`prooftape-consumer-example`](https://github.com/DelshadH/prooftape-consumer-example)
+is the packaging and onboarding check outside this monorepo. Its first
+[upgrade run](https://github.com/DelshadH/prooftape-consumer-example/actions/runs/30160157416)
+keeps ordinary tests green across `camelcase` `6.3.0` to `7.0.1`, while
+ProofTape reports one changed return and exits `2`. It installs all four alpha
+packages from checksum-verified tarballs, uses no secrets or write token, pins
+both workflow trust roots to full commits, uploads the report and reproduction,
+and emits the explicit authenticity warning. See
+[external-consumer.md](external-consumer.md) for the exact revisions and
+hashes.
+
 The gate identifiers are stable so test output and release evidence can refer to
 the same requirement over time. Changing a requirement needs an explicit design
 decision, not a quieter test.
