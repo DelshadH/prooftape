@@ -112,6 +112,8 @@ versioning promise in
 boundary in [docs/security-model.md](docs/security-model.md), and every release
 gate in [docs/quality-plan.md](docs/quality-plan.md). The protected workflow
 setup is in [docs/github.md](docs/github.md).
+The independent packed-package and reusable-workflow proof is recorded in
+[docs/external-consumer.md](docs/external-consumer.md).
 
 Project decisions and review authority are documented in
 [GOVERNANCE.md](GOVERNANCE.md), the supported maintenance window in

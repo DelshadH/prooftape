@@ -21,7 +21,7 @@ permissions:
 
 jobs:
   comparison:
-    uses: DelshadH/prooftape/.github/workflows/prooftape.yml@4c77fb152ede888cc85295e54291bf16b0f45f22
+    uses: DelshadH/prooftape/.github/workflows/prooftape.yml@7e2b4cf7aa0da8a7180ccf7a4b4f93a8ac0e157e
     permissions:
       contents: read
     with:
@@ -47,6 +47,14 @@ do not establish observation authorship.
 The composite recording Action exposes
 `observation-authenticity=not-established`. Callers do not need to parse a
 capsule to discover this boundary.
+
+The independent
+[ProofTape consumer example](https://github.com/DelshadH/prooftape-consumer-example)
+uses this exact pin. Its first
+[dependency-upgrade run](https://github.com/DelshadH/prooftape-consumer-example/actions/runs/30160157416)
+proves the complete caller path outside this monorepo. The reproducible evidence
+and exact hashes are recorded in
+[external-consumer.md](external-consumer.md).
 
 ## Make it required
 
