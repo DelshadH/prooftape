@@ -24,7 +24,7 @@ outputs:
     description: Absolute path of the generated capsule
     value: ${{ steps.record.outputs.capsule-path }}
   capsule-sha256:
-    description: SHA-256 of the generated capsule bytes
+    description: SHA-256 for checking capsule transport; it does not authenticate observations
     value: ${{ steps.record.outputs.capsule-sha256 }}
 runs:
   using: composite

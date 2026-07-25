@@ -218,6 +218,9 @@ export async function generateReproduction(
     "",
     "Exit 0 matches the recorded base outcome. Exit 1 reproduces the behavior difference.",
     "",
+    "Observation authenticity is not established. Code under test shared the recorder's",
+    "process authority and could have suppressed or forged the captured call.",
+    "",
   ].join("\n");
   const files = {
     "README.md": readme,
@@ -232,6 +235,7 @@ export async function generateReproduction(
   const manifest = canonicalJson({
     schemaVersion: "1",
     kind: "prooftape-reproduction-manifest",
+    observationAuthenticity: "not-established",
     matchKey: difference.matchKey,
     files: Object.fromEntries(
       Object.entries(files)

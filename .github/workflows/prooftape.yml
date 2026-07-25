@@ -100,7 +100,7 @@ jobs:
           compression-level: 0
 
   record_candidate:
-    name: Record untrusted candidate
+    name: Record candidate (observations unauthenticated)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:

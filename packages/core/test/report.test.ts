@@ -24,6 +24,7 @@ function capsule(value: unknown): CapsuleV1 {
       },
       prooftapeVersion: "0.0.0",
       configurationSha256: "c".repeat(64),
+      observationAuthenticity: "not-established",
     },
     calls: [{
       schemaVersion: "1",
@@ -50,6 +51,8 @@ describe("buildReport", () => {
     expect(report.verdict).toBe("no-blocking-differences-observed");
     expect(report.blockingDifferenceCount).toBe(0);
     expect(report.differences).toEqual([]);
+    expect(report.baseline.observationAuthenticity).toBe("not-established");
+    expect(report.candidate.observationAuthenticity).toBe("not-established");
   });
 
   it("emits changed behavior with evidence hashes", () => {

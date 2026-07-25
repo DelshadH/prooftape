@@ -24,6 +24,7 @@ const metadata: EvidenceMetadataV1 = {
   },
   prooftapeVersion: "0.0.0",
   configurationSha256: "c".repeat(64),
+  observationAuthenticity: "not-established",
 };
 
 function call(processId: string, sequence: number, value: unknown): CallObservationV1 {

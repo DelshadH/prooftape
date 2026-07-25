@@ -115,7 +115,11 @@ try {
     "smoke.ptape",
   ], { cwd: fixture });
   const capsule = JSON.parse(await readFile(join(fixture, "smoke.ptape"), "utf8"));
-  if (capsule.kind !== "prooftape-capsule" || capsule.calls?.length !== 1) {
+  if (
+    capsule.kind !== "prooftape-capsule"
+    || capsule.calls?.length !== 1
+    || capsule.metadata?.observationAuthenticity !== "not-established"
+  ) {
     throw new Error("packed CLI record smoke produced an invalid capsule");
   }
   const actionOutput = join(temporary, "github-output.txt");
@@ -137,6 +141,7 @@ try {
   if (
     actionCapsule.kind !== "prooftape-capsule"
     || actionCapsule.calls?.length !== 1
+    || actionCapsule.metadata?.observationAuthenticity !== "not-established"
     || !/capsule-sha256=[a-f0-9]{64}/u.test(outputMetadata)
   ) {
     throw new Error("composite Action helper smoke produced invalid evidence");

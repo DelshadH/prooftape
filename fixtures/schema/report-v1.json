@@ -9,13 +9,15 @@
     "capsuleHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
     "commitSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     "lockfileSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-    "dependencyVersion": "1.0.0"
+    "dependencyVersion": "1.0.0",
+    "observationAuthenticity": "not-established"
   },
   "candidate": {
     "capsuleHash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
     "commitSha": "ffffffffffffffffffffffffffffffffffffffff",
     "lockfileSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-    "dependencyVersion": "2.0.0"
+    "dependencyVersion": "2.0.0",
+    "observationAuthenticity": "not-established"
   },
   "differences": [
     {

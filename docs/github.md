@@ -1,7 +1,9 @@
 # Protected GitHub setup
 
-ProofTape's reusable workflow is an independent evidence path only when the
-caller definition and required-check rule are protected from the candidate.
+ProofTape's reusable workflow protects the exact base artifact and artifact
+transport only when the caller definition and required-check rule are protected
+from the candidate. It does not authenticate observations created inside the
+candidate process.
 
 This concrete caller runs the repository's Acorn smoke fixture. It pins the
 reusable workflow to the commit that introduced the reviewed three-job
@@ -47,4 +49,8 @@ exact event SHAs, read-only permission, and absence of `secrets: inherit`.
 Do not switch this to `pull_request_target`. Do not add repository, organization,
 or environment secrets. Do not add a cache shared with candidate execution.
 The candidate job is allowed to fail or produce a hostile capsule; the separate
-verifier checks its producing-job hash, bounded schema, and exit code.
+verifier checks its producing-job hash, bounded schema, and exit code. That hash
+identifies the bytes emitted by the candidate job. It does not prove candidate
+code did not suppress or forge calls before capsule creation. Use the workflow
+as regression evidence only when code under test is not actively evading the
+instrumentation.

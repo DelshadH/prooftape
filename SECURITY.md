@@ -16,4 +16,6 @@ High-priority areas include:
 ProofTape is pre-release software. Until version 0.1 is published, run local
 comparisons only in disposable repositories without credentials. For hostile
 pull requests, use the separate-job workflow described in
-`docs/github.md` on an ephemeral hosted runner.
+`docs/github.md` on an ephemeral hosted runner to protect the host and base
+artifact. That workflow does not authenticate candidate observations against
+candidate code; see `docs/security-model.md`.

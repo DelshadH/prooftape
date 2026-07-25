@@ -254,6 +254,7 @@ export async function recordRevision(
     dependency,
     prooftapeVersion: options.prooftapeVersion,
     configurationSha256,
+    observationAuthenticity: "not-established",
   };
   const rawDirectory = await mkdtemp(join(tmpdir(), "prooftape-record-"));
   const sessionId = randomBytes(12).toString("hex");

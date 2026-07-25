@@ -69,12 +69,14 @@ export function buildReport(base: CapsuleV1, candidate: CapsuleV1): ReportV1 {
       commitSha: base.metadata.commitSha,
       lockfileSha256: base.metadata.lockfileSha256,
       dependencyVersion: base.metadata.dependency.version,
+      observationAuthenticity: base.metadata.observationAuthenticity,
     },
     candidate: {
       capsuleHash: sha256(canonicalCapsule(candidate)),
       commitSha: candidate.metadata.commitSha,
       lockfileSha256: candidate.metadata.lockfileSha256,
       dependencyVersion: candidate.metadata.dependency.version,
+      observationAuthenticity: candidate.metadata.observationAuthenticity,
     },
     differences,
   };

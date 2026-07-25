@@ -4,13 +4,19 @@ ProofTape writes canonical JSON followed by one newline. All public objects use
 `"schemaVersion": "1"`. Parsers reject unknown fields and incompatible versions
 instead of guessing forward compatibility.
 
+Pre-release amendment: the required `observationAuthenticity` marker was added
+while every package was still unpublished at `0.0.0`. Earlier development
+artifacts without the marker are intentionally rejected rather than silently
+upgraded, so an absent trust boundary cannot be mistaken for authenticated
+evidence.
+
 ## Capsule
 
 A capsule has:
 
 - `kind: "prooftape-capsule"`;
 - evidence metadata for commit, lockfile, runtime, command, dependency, tool,
-  and configuration;
+  configuration, and `observationAuthenticity: "not-established"`;
 - an ordered `calls` array;
 - an `issues` array.
 
@@ -45,7 +51,8 @@ A report has:
 - dependency and verdict;
 - blocking and warning counts that must equal the difference array;
 - base and candidate capsule hashes, commits, lockfile hashes, and dependency
-  versions;
+  versions, with `observationAuthenticity: "not-established"` repeated for each
+  evidence summary;
 - versioned differences;
 - optional reproduction metadata.
 
@@ -58,4 +65,10 @@ Capsule hashes cover canonical capsule bytes without the trailing file newline.
 Lockfile hashes cover exact installed-checkout bytes. Artifact hashes in the
 GitHub workflow cover the complete capsule file bytes, including its newline.
 Reproduction manifests hash each generated file and then hash the canonical
-manifest.
+manifest. Reproduction manifests also carry
+`observationAuthenticity: "not-established"`, and the generated README states
+the same limitation.
+
+Hashes detect byte changes after production. They do not prove that code under
+test did not suppress or forge the in-process observations before the capsule
+was produced.

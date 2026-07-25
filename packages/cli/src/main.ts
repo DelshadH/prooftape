@@ -44,6 +44,7 @@ Usage:
   prooftape compare --base-ref <sha> --candidate-ref <sha> --dependency <name> --command <command> [--report <file>] [--repro-dir <dir>]
 
 Commands are parsed into direct argument vectors. Shell operators and substitutions are rejected.
+Observation authenticity is not established against code under test.
 
 Exit codes:
   0  no blocking differences observed in captured supported calls
@@ -191,7 +192,15 @@ function cleanTerminal(value: string): string {
   return value.replace(/[\u0000-\u001f\u007f-\u009f]/gu, "?").slice(0, 1_000);
 }
 
+function printAuthenticityWarning(io: CliIo): void {
+  io.stderr(
+    "Observation authenticity is not established: code under test shares "
+      + "the recorder's process authority and can suppress or forge captured calls.\n",
+  );
+}
+
 function printReport(report: ReportV1, io: CliIo): void {
+  printAuthenticityWarning(io);
   if (report.verdict === "no-blocking-differences-observed") {
     io.stdout("No blocking differences observed in captured supported calls.\n");
     return;
@@ -249,6 +258,7 @@ async function recordCommand(
     normalizers: parseNormalizers(options.get("--normalize") ?? []),
   });
   await writeExclusive(output, `${canonicalCapsule(result.capsule)}\n`);
+  printAuthenticityWarning(io);
   if (result.hasUnsupported) {
     io.stderr("Recording completed with explicitly unsupported observations.\n");
     return EXIT.INVALID_INPUT;

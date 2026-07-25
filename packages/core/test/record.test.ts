@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -121,6 +121,31 @@ describe("recordRevision", () => {
     } finally {
       delete process.env.PROOFTAPE_TEST_SECRET_CANARY;
     }
+  });
+
+  it("marks forged in-process observations as unauthenticated", async () => {
+    const attackSource = await readFile(
+      new URL("./fixtures/forge-raw-observation.mjs", import.meta.url),
+      "utf8",
+    );
+    const directory = await repository(attackSource);
+
+    const result = await recordRevision({
+      cwd: directory,
+      dependency: "fixture",
+      command: [process.execPath, "app.mjs"],
+      hookUrl,
+      prooftapeVersion: "0.0.0",
+      redactLiterals: [],
+      timeoutMilliseconds: 10_000,
+      maxOutputBytes: 64 * 1024,
+    });
+
+    expect(result.capsule.calls[0]?.argsBefore).toEqual(["forged"]);
+    expect(result.capsule.calls[0]?.value).toEqual({ input: "forged" });
+    expect(result.capsule.metadata.observationAuthenticity).toBe(
+      "not-established",
+    );
   });
 
   it("classifies failed, timed out, and unobserved commands", async () => {

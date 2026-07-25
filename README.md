@@ -13,7 +13,8 @@ it also writes an executable minimal reproduction.
 > isolated worktrees, reproduction generator, package smoke test, and
 > least-privilege reusable workflow are implemented and exercised. The npm
 > packages are not published yet, the supported JavaScript surface is
-> deliberately narrow, and the local runner is not a sandbox for hostile code.
+> deliberately narrow, the local runner is not a sandbox for hostile code, and
+> observation authenticity is not established against code under test.
 
 ## Run from a checkout
 
@@ -46,6 +47,21 @@ node packages/cli/dist/cli.js diff --baseline baseline.ptape --candidate candida
 Commands are parsed into an argument vector and executed without a shell.
 Operators, substitutions, multiline input, and more than 256 arguments are
 rejected.
+
+## Trust boundary
+
+ProofTape detects regressions when the executed code does not actively evade or
+forge its in-process instrumentation. The hook configuration necessarily gives
+that process its writable raw directory and session identifier. Code under test
+therefore has enough authority to suppress calls or replace them with
+well-formed forged observations. Structural validation, session identifiers,
+capsule hashes, and separate GitHub jobs do not establish who authored a call.
+
+Every capsule and report records
+`"observationAuthenticity": "not-established"`, and every successful
+record/diff/compare command prints the same warning. The separate-job workflow
+still protects already-recorded base evidence and artifact transport from the
+candidate; it does not turn candidate observations into an attestation.
 
 ## What is supported
 
@@ -96,7 +112,9 @@ workflow setup is in [docs/github.md](docs/github.md).
 Recorded commands are arbitrary project code. Use a disposable local repository
 or the separate-job GitHub workflow, never a privileged self-hosted runner.
 ProofTape removes unrelated environment variables before starting the command,
-but it does not contain filesystem or network access on a local machine. Read
-[SECURITY.md](SECURITY.md) before using captured private data.
+but it does not contain filesystem or network access on a local machine. An
+ephemeral hosted runner protects the host better; it does not prevent candidate
+code from forging its own capture. Read [SECURITY.md](SECURITY.md) before using
+captured private data.
 
 Apache-2.0 licensed.

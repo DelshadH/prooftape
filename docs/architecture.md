@@ -39,6 +39,12 @@ The recorder checks repository status before and after the command. It also
 passes only a small non-secret environment allowlist plus the hook
 configuration.
 
+The configuration includes the raw output directory and session identifier.
+Because application code shares the hook's process authority, it can read that
+configuration and alter its own raw stream. Merge validation proves bounded
+structure and consistency, not observation authorship. The resulting capsule
+and report carry `observationAuthenticity: "not-established"`.
+
 ## Transparent interception
 
 The preload calls Node's synchronous `module.registerHooks`. Its load hook parses
@@ -95,4 +101,6 @@ disable npm lifecycle scripts, and never use `pull_request_target`.
 Each recording job publishes a capsule plus its SHA-256 as a job output. The
 verifier downloads the two immutable-name artifacts, checks those hashes,
 strictly parses both capsules, emits the report/reproduction artifact, and then
-enforces the public exit code.
+enforces the public exit code. This isolates the base artifact and authenticates
+transport from each producing job. It does not authenticate calls emitted by
+code inside the candidate job.

@@ -20,3 +20,7 @@
   capsule hashes, and a separate strict verifier.
 - Made fixed-path release evidence safely rerunnable inside `.evidence` while
   keeping other outputs create-only, and clean up performance-gate observations.
+- Narrowed the candidate trust contract after an adversarial fixture proved
+  same-process code can forge its raw stream; capsules, reports, CLI output, and
+  security documentation now state that observation authenticity is not
+  established.

@@ -33,6 +33,7 @@ const capsule: CapsuleV1 = {
     },
     prooftapeVersion: "0.0.0",
     configurationSha256: "c".repeat(64),
+    observationAuthenticity: "not-established",
   },
   calls: [
     {
@@ -89,6 +90,37 @@ describe("parseCapsule", () => {
     };
     expect(() => parseCapsule(JSON.stringify(oversized))).toThrow(/call limit/);
   });
+
+  it("requires the in-process observation-authenticity limitation", () => {
+    const marked = {
+      ...capsule,
+      metadata: {
+        ...capsule.metadata,
+        observationAuthenticity: "not-established",
+      },
+    };
+
+    expect(parseCapsule(JSON.stringify(marked)).metadata).toMatchObject({
+      observationAuthenticity: "not-established",
+    });
+    const {
+      observationAuthenticity: _observationAuthenticity,
+      ...unmarkedMetadata
+    } = capsule.metadata;
+    expect(() => parseCapsule(JSON.stringify({
+      ...capsule,
+      metadata: unmarkedMetadata,
+    }))).toThrow(
+      /observationAuthenticity/,
+    );
+    expect(() => parseCapsule(JSON.stringify({
+      ...marked,
+      metadata: {
+        ...marked.metadata,
+        observationAuthenticity: "established",
+      },
+    }))).toThrow(/observationAuthenticity/);
+  });
 });
 
 const report: ReportV1 = {
@@ -103,12 +135,14 @@ const report: ReportV1 = {
     commitSha: "a".repeat(40),
     lockfileSha256: "b".repeat(64),
     dependencyVersion: "1.0.0",
+    observationAuthenticity: "not-established",
   },
   candidate: {
     capsuleHash: "e".repeat(64),
     commitSha: "f".repeat(40),
     lockfileSha256: "c".repeat(64),
     dependencyVersion: "2.0.0",
+    observationAuthenticity: "not-established",
   },
   differences: [{
     schemaVersion: "1",
@@ -143,6 +177,35 @@ describe("parseReport", () => {
     );
     expect(() => parseReport(JSON.stringify({ ...report, blockingDifferenceCount: 0 }))).toThrow(
       /blockingDifferenceCount/,
+    );
+  });
+
+  it("requires the authenticity limitation for both evidence summaries", () => {
+    const marked = {
+      ...report,
+      baseline: {
+        ...report.baseline,
+        observationAuthenticity: "not-established",
+      },
+      candidate: {
+        ...report.candidate,
+        observationAuthenticity: "not-established",
+      },
+    };
+
+    expect(parseReport(JSON.stringify(marked))).toMatchObject({
+      baseline: { observationAuthenticity: "not-established" },
+      candidate: { observationAuthenticity: "not-established" },
+    });
+    const {
+      observationAuthenticity: _baselineAuthenticity,
+      ...unmarkedBaseline
+    } = report.baseline;
+    expect(() => parseReport(JSON.stringify({
+      ...report,
+      baseline: unmarkedBaseline,
+    }))).toThrow(
+      /observationAuthenticity/,
     );
   });
 });

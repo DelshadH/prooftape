@@ -17,7 +17,8 @@
       "entry": "node_modules/fixture/index.js"
     },
     "prooftapeVersion": "0.0.0",
-    "configurationSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    "configurationSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "observationAuthenticity": "not-established"
   },
   "calls": [
     {

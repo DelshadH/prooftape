@@ -2,6 +2,7 @@ export type JsonPrimitive = null | boolean | number | string;
 export type JsonValue = JsonPrimitive | JsonValue[] | { readonly [key: string]: JsonValue };
 
 export type OutcomeKind = "return" | "throw" | "resolve" | "reject";
+export type ObservationAuthenticity = "not-established";
 
 export interface SerializedError {
   readonly name: string;
@@ -75,6 +76,7 @@ export interface EvidenceMetadataV1 {
   };
   readonly prooftapeVersion: string;
   readonly configurationSha256: string;
+  readonly observationAuthenticity: ObservationAuthenticity;
 }
 
 export interface CaptureIssueV1 {
@@ -101,6 +103,7 @@ export interface ReportEvidenceV1 {
   readonly commitSha: string;
   readonly lockfileSha256: string;
   readonly dependencyVersion: string;
+  readonly observationAuthenticity: ObservationAuthenticity;
 }
 
 export interface ReproductionEvidenceV1 {
@@ -375,6 +378,7 @@ function parseMetadata(value: unknown, path: string): EvidenceMetadataV1 {
       "dependency",
       "prooftapeVersion",
       "configurationSha256",
+      "observationAuthenticity",
     ],
     [
       "commitSha",
@@ -386,6 +390,7 @@ function parseMetadata(value: unknown, path: string): EvidenceMetadataV1 {
       "dependency",
       "prooftapeVersion",
       "configurationSha256",
+      "observationAuthenticity",
     ],
     path,
   );
@@ -402,6 +407,12 @@ function parseMetadata(value: unknown, path: string): EvidenceMetadataV1 {
   }
   if (!/^[a-f0-9]{64}$/.test(configurationSha256)) {
     fail(`${path}/configurationSha256`, "expected SHA-256");
+  }
+  if (object.observationAuthenticity !== "not-established") {
+    fail(
+      `${path}/observationAuthenticity`,
+      "expected \"not-established\"",
+    );
   }
   if (!Array.isArray(object.command) || object.command.length === 0 || object.command.length > 256) {
     fail(`${path}/command`, "expected 1 to 256 arguments");
@@ -429,6 +440,7 @@ function parseMetadata(value: unknown, path: string): EvidenceMetadataV1 {
     },
     prooftapeVersion: stringValue(object.prooftapeVersion, `${path}/prooftapeVersion`, 64),
     configurationSha256,
+    observationAuthenticity: "not-established",
   };
 }
 
@@ -498,15 +510,34 @@ function parseReportEvidence(value: unknown, path: string): ReportEvidenceV1 {
   const object = record(value, path);
   strictKeys(
     object,
-    ["capsuleHash", "commitSha", "lockfileSha256", "dependencyVersion"],
-    ["capsuleHash", "commitSha", "lockfileSha256", "dependencyVersion"],
+    [
+      "capsuleHash",
+      "commitSha",
+      "lockfileSha256",
+      "dependencyVersion",
+      "observationAuthenticity",
+    ],
+    [
+      "capsuleHash",
+      "commitSha",
+      "lockfileSha256",
+      "dependencyVersion",
+      "observationAuthenticity",
+    ],
     path,
   );
+  if (object.observationAuthenticity !== "not-established") {
+    fail(
+      `${path}/observationAuthenticity`,
+      "expected \"not-established\"",
+    );
+  }
   return {
     capsuleHash: hashValue(object.capsuleHash, `${path}/capsuleHash`, 64),
     commitSha: hashValue(object.commitSha, `${path}/commitSha`, 40),
     lockfileSha256: hashValue(object.lockfileSha256, `${path}/lockfileSha256`, 64),
     dependencyVersion: stringValue(object.dependencyVersion, `${path}/dependencyVersion`, 256),
+    observationAuthenticity: "not-established",
   };
 }
 

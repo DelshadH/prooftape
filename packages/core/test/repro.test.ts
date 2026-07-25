@@ -24,6 +24,7 @@ function capsule(value: string, version: string, commit: string): CapsuleV1 {
       },
       prooftapeVersion: "0.0.0",
       configurationSha256: "c".repeat(64),
+      observationAuthenticity: "not-established",
     },
     calls: [{
       schemaVersion: "1",
@@ -73,7 +74,13 @@ describe("generateReproduction", () => {
 
     expect(evidence.manifestSha256).toMatch(/^[a-f0-9]{64}$/);
     expect(JSON.parse(await readFile(join(directory, "manifest.json"), "utf8")))
-      .toMatchObject({ kind: "prooftape-reproduction-manifest" });
+      .toMatchObject({
+        kind: "prooftape-reproduction-manifest",
+        observationAuthenticity: "not-established",
+      });
+    expect(await readFile(join(directory, "README.md"), "utf8")).toContain(
+      "Observation authenticity is not established",
+    );
     const baseEnvironment = await installedFixture("before");
     const candidateEnvironment = await installedFixture("after");
     const baseRun = spawnSync(process.execPath, [join(directory, "repro.mjs")], {

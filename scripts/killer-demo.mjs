@@ -166,6 +166,11 @@ try {
     throw new Error(`ProofTape comparison did not exit 2: ${comparison.stderr.trim()}`);
   }
   show("3. ProofTape exit: 2");
+  const authenticityWarning = comparison.stderr.trim();
+  if (!authenticityWarning.includes("Observation authenticity is not established")) {
+    throw new Error("ProofTape comparison omitted the observation-authenticity warning");
+  }
+  show(`   ${authenticityWarning}`);
   show(`4. ${comparison.stdout.trim().split(/\r?\n/u).join(" ")}`);
 
   const candidateRepro = execute(
@@ -199,6 +204,8 @@ try {
     report.kind !== "prooftape-report"
     || report.blockingDifferenceCount !== 1
     || report.reproduction?.matchKey !== report.differences?.[0]?.matchKey
+    || report.baseline?.observationAuthenticity !== "not-established"
+    || report.candidate?.observationAuthenticity !== "not-established"
   ) {
     throw new Error("report and reproduction counterexample do not match");
   }

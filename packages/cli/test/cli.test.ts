@@ -23,6 +23,7 @@ function capsule(value: string, commit: string): CapsuleV1 {
       },
       prooftapeVersion: "0.0.0",
       configurationSha256: "c".repeat(64),
+      observationAuthenticity: "not-established",
     },
     calls: [{
       schemaVersion: "1",
@@ -88,6 +89,9 @@ describe("runCli", () => {
 
     expect(exitCode).toBe(2);
     expect(streams.read().stdout).toContain("1 blocking difference");
+    expect(streams.read().stderr).toContain(
+      "Observation authenticity is not established",
+    );
     const report = JSON.parse(await readFile(join(cwd, "report.json"), "utf8"));
     expect(report).toMatchObject({
       schemaVersion: "1",
@@ -118,6 +122,9 @@ describe("runCli", () => {
     expect(exitCode).toBe(0);
     expect(streams.read().stdout).toContain(
       "No blocking differences observed in captured supported calls",
+    );
+    expect(streams.read().stderr).toContain(
+      "Observation authenticity is not established",
     );
   });
 
