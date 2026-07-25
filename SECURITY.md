@@ -21,3 +21,14 @@ pull requests, use the separate-job workflow described in
 artifact. That workflow does not authenticate candidate observations against
 candidate code. Its Action output and job summary state that limitation
 explicitly; see `docs/security-model.md`.
+
+Supported security maintenance covers the current alpha and, after a stable
+release exists, the latest stable release. Affected published versions are
+named in the private advisory and eventual disclosure. Release-integrity or
+publisher-identity incidents follow
+[docs/compromised-release.md](docs/compromised-release.md).
+
+Repository recovery, npm ownership, trusted-publisher removal, session/token
+revocation, and successor validation are documented in
+[docs/maintainer-recovery.md](docs/maintainer-recovery.md). That procedure
+deliberately contains no recovery codes, private contacts, or account secrets.
