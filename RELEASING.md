@@ -15,9 +15,19 @@ For each package (`@prooftape/schema`, `@prooftape/core`, `@prooftape/hook`, and
 - workflow filename `release.yml`;
 - GitHub environment `npm-release`.
 
-In GitHub, create the `npm-release` environment, restrict it to the protected
-release tag, disallow administrators from bypassing its rules, and require a
-maintainer who did not author the release commit to approve deployment.
+The `npm-release` GitHub environment was configured and read back on
+2026-07-25. It permits only tag `v0.1.0-alpha.1`, prevents self-review and
+administrator bypass, and contains no secret or variable. It must retain a
+maintainer who did not author the release commit as its required reviewer.
+
+### Current independent-review blocker
+
+The repository currently has one collaborator. That account is the configured
+environment reviewer, but the environment correctly rejects self-approval. Add
+and validate a second maintainer, then configure that maintainer as a required
+reviewer before creating the release tag or dispatching the workflow. Do not
+weaken self-review or administrator-bypass protection to work around this
+blocker.
 
 ### Current first-publish blocker
 

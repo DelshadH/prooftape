@@ -88,6 +88,18 @@ That environment must:
 3. prevent administrator bypass;
 4. contain no npm token or other secret.
 
+These GitHub-side controls were configured and read back on 2026-07-25:
+the only permitted deployment ref is tag `v0.1.0-alpha.1`, self-review and
+administrator bypass are disabled, and the environment has zero secrets and
+zero variables. `main` also requires an up-to-date pull request, one approval,
+the three documented CI checks, stale-review dismissal, last-push approval,
+conversation resolution, and administrator enforcement; force pushes and
+deletion are disabled.
+
+The repository currently has one collaborator. That account cannot approve its
+own environment deployment, so a second qualified maintainer is an intentional
+release blocker rather than a reason to relax the controls.
+
 The manual release workflow has only `contents: read` and `id-token: write`,
 checks out and verifies the exact `v0.1.0-alpha.1` tag, rejects older npm clients
 that cannot use trusted publishing, rebuilds all evidence, and publishes the
