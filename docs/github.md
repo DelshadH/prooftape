@@ -6,8 +6,8 @@ from the candidate. It does not authenticate observations created inside the
 candidate process.
 
 This concrete caller runs the repository's Acorn smoke fixture. It pins the
-reusable workflow to the commit that introduced the reviewed three-job
-implementation.
+reusable workflow to the reviewed three-job implementation with the explicit
+observation-authenticity boundary and immutable tool checkout.
 
 ```yaml
 name: Dependency behavior
@@ -21,7 +21,7 @@ permissions:
 
 jobs:
   proof:
-    uses: DelshadH/prooftape/.github/workflows/prooftape.yml@939ee798d55bb6b09eaff62f44b60bcabe9d7e0c
+    uses: DelshadH/prooftape/.github/workflows/prooftape.yml@82b62b6a5cc3f6145cfd2fda6da04f077f835147
     permissions:
       contents: read
     with:
