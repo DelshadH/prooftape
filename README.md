@@ -106,10 +106,12 @@ locked `camelcase`, `is-number`, and `ms` upgrades. CI runs the supported Node
 22 and 24 matrix. Repeated release-gate runs safely replace their own prior
 files inside `.evidence`; other explicit output paths remain create-only.
 
-The JSON format is documented in [docs/formats.md](docs/formats.md), the
-security boundary in [docs/security-model.md](docs/security-model.md), and every
-release gate in [docs/quality-plan.md](docs/quality-plan.md). The protected
-workflow setup is in [docs/github.md](docs/github.md).
+The JSON format is documented in [docs/formats.md](docs/formats.md), its public
+versioning promise in
+[docs/schema-compatibility.md](docs/schema-compatibility.md), the security
+boundary in [docs/security-model.md](docs/security-model.md), and every release
+gate in [docs/quality-plan.md](docs/quality-plan.md). The protected workflow
+setup is in [docs/github.md](docs/github.md).
 
 ## Security
 

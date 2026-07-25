@@ -1,9 +1,13 @@
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import type { CapsuleV1 } from "@prooftape/schema";
+import {
+  parseReproductionManifest,
+  type CapsuleV1,
+} from "@prooftape/schema";
 import { buildReport, generateReproduction } from "../src/index.js";
 
 function capsule(value: string, version: string, commit: string): CapsuleV1 {
@@ -73,11 +77,17 @@ describe("generateReproduction", () => {
     const evidence = await generateReproduction(base, candidate, report, directory);
 
     expect(evidence.manifestSha256).toMatch(/^[a-f0-9]{64}$/);
-    expect(JSON.parse(await readFile(join(directory, "manifest.json"), "utf8")))
-      .toMatchObject({
-        kind: "prooftape-reproduction-manifest",
-        observationAuthenticity: "not-established",
-      });
+    const manifest = parseReproductionManifest(
+      await readFile(join(directory, "manifest.json")),
+    );
+    expect(manifest).toMatchObject({
+      kind: "prooftape-reproduction-manifest",
+      observationAuthenticity: "not-established",
+    });
+    for (const [filename, expectedHash] of Object.entries(manifest.files)) {
+      const bytes = await readFile(join(directory, filename));
+      expect(createHash("sha256").update(bytes).digest("hex")).toBe(expectedHash);
+    }
     expect(await readFile(join(directory, "README.md"), "utf8")).toContain(
       "Observation authenticity is not established",
     );

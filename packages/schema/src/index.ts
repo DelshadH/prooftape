@@ -112,6 +112,21 @@ export interface ReproductionEvidenceV1 {
   readonly matchKey: string;
 }
 
+export type ReproductionFileV1 =
+  | "README.md"
+  | "base-package.json"
+  | "candidate-package.json"
+  | "input.json"
+  | "repro.mjs";
+
+export interface ReproductionManifestV1 {
+  readonly schemaVersion: "1";
+  readonly kind: "prooftape-reproduction-manifest";
+  readonly observationAuthenticity: ObservationAuthenticity;
+  readonly matchKey: string;
+  readonly files: Readonly<Record<ReproductionFileV1, string>>;
+}
+
 export interface ReportV1 {
   readonly schemaVersion: "1";
   readonly kind: "prooftape-report";
@@ -136,6 +151,10 @@ export const CAPSULE_LIMITS = Object.freeze({
 export const REPORT_LIMITS = Object.freeze({
   maxBytes: 20 * 1024 * 1024,
   maxDifferences: 20_000,
+} as const);
+
+export const REPRODUCTION_MANIFEST_LIMITS = Object.freeze({
+  maxBytes: 64 * 1024,
 } as const);
 
 export class SchemaValidationError extends Error {
@@ -701,6 +720,80 @@ export function parseReport(input: string | Uint8Array): ReportV1 {
     result.reproduction = parseReproduction(object.reproduction, "/reproduction");
   }
   return result;
+}
+
+export function parseReproductionManifest(
+  input: string | Uint8Array,
+): ReproductionManifestV1 {
+  const text = typeof input === "string" ? input : new TextDecoder().decode(input);
+  if (Buffer.byteLength(text, "utf8") > REPRODUCTION_MANIFEST_LIMITS.maxBytes) {
+    fail("/", "reproduction manifest byte limit exceeded");
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    fail("/", "invalid JSON");
+  }
+  const object = record(parsed, "/");
+  strictKeys(
+    object,
+    [
+      "schemaVersion",
+      "kind",
+      "observationAuthenticity",
+      "matchKey",
+      "files",
+    ],
+    [
+      "schemaVersion",
+      "kind",
+      "observationAuthenticity",
+      "matchKey",
+      "files",
+    ],
+    "/",
+  );
+  if (object.schemaVersion !== "1") fail("/schemaVersion", "expected \"1\"");
+  if (object.kind !== "prooftape-reproduction-manifest") {
+    fail("/kind", "expected prooftape-reproduction-manifest");
+  }
+  if (object.observationAuthenticity !== "not-established") {
+    fail(
+      "/observationAuthenticity",
+      "expected \"not-established\"",
+    );
+  }
+  const files = record(object.files, "/files");
+  const fileNames: readonly ReproductionFileV1[] = [
+    "README.md",
+    "base-package.json",
+    "candidate-package.json",
+    "input.json",
+    "repro.mjs",
+  ];
+  strictKeys(files, fileNames, fileNames, "/files");
+  return {
+    schemaVersion: "1",
+    kind: "prooftape-reproduction-manifest",
+    observationAuthenticity: "not-established",
+    matchKey: stringValue(object.matchKey, "/matchKey", 4_096),
+    files: {
+      "README.md": hashValue(files["README.md"], "/files/README.md", 64),
+      "base-package.json": hashValue(
+        files["base-package.json"],
+        "/files/base-package.json",
+        64,
+      ),
+      "candidate-package.json": hashValue(
+        files["candidate-package.json"],
+        "/files/candidate-package.json",
+        64,
+      ),
+      "input.json": hashValue(files["input.json"], "/files/input.json", 64),
+      "repro.mjs": hashValue(files["repro.mjs"], "/files/repro.mjs", 64),
+    },
+  };
 }
 
 export const EXIT = Object.freeze({

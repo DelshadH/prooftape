@@ -7,7 +7,9 @@ import type {
   JsonValue,
   ReportV1,
   ReproductionEvidenceV1,
+  ReproductionManifestV1,
 } from "@prooftape/schema";
+import { parseReproductionManifest } from "@prooftape/schema";
 import { canonicalJson, sha256 } from "./canonical.js";
 
 const REPRO_SCRIPT = `#!/usr/bin/env node
@@ -232,17 +234,21 @@ export async function generateReproduction(
   for (const [name, content] of Object.entries(files)) {
     await exclusiveWrite(resolve(absolute, name), content);
   }
-  const manifest = canonicalJson({
+  const manifestValue = {
     schemaVersion: "1",
     kind: "prooftape-reproduction-manifest",
     observationAuthenticity: "not-established",
     matchKey: difference.matchKey,
-    files: Object.fromEntries(
-      Object.entries(files)
-        .sort(([left], [right]) => left.localeCompare(right))
-        .map(([name, content]) => [name, sha256(content)]),
-    ),
-  });
+    files: {
+      "README.md": sha256(files["README.md"]),
+      "base-package.json": sha256(files["base-package.json"]),
+      "candidate-package.json": sha256(files["candidate-package.json"]),
+      "input.json": sha256(files["input.json"]),
+      "repro.mjs": sha256(files["repro.mjs"]),
+    },
+  } satisfies ReproductionManifestV1;
+  const manifest = canonicalJson(manifestValue);
+  parseReproductionManifest(manifest);
   await exclusiveWrite(resolve(absolute, "manifest.json"), `${manifest}\n`);
   return {
     directory: basename(absolute),

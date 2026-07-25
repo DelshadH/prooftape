@@ -8,7 +8,7 @@ claim.
 |---|---|---|
 | PT-G13 | Clean toolchain and package bootstrap | Fresh Linux checkouts run locked install, typecheck, tests, package smoke, and CLI smoke on Node 22 and 24. |
 | PT-G01 | ESM and CJS interception feasibility | Supported sync/async calls are observed on Node 22 and 24 without changing outcomes, descriptors used by fixtures, or `this` behavior. |
-| PT-G02 | Canonical schema | Golden fixtures round-trip; repeated runs produce byte-identical canonical capsules; schema rejects unknown incompatible versions. |
+| PT-G02 | Canonical schema | Capsule, report, and reproduction-manifest golden fixtures parse from source and the packed clean-room install; repeated runs produce byte-identical canonical capsules; schemas reject unknown fields and incompatible versions. |
 | PT-G14 | Capture completeness | Under the documented non-adversarial-code assumption, child-process and parallel fixtures produce exact expected call counts; corruption or unsupported loss is explicit and nonzero, never silent. |
 | PT-G03 | No-change oracle | Base/candidate with identical behavior exits 0 and emits zero blocking differences across 20 repeated runs. |
 | PT-G04 | Green-tests/changed-behavior oracle | Both test commands exit 0; ProofTape exits 2 and identifies the exact changed return/throw with a runnable counterexample. |
@@ -80,7 +80,7 @@ A hand-edited screenshot is not evidence.
 |---|---|
 | PT-G13 | `.github/workflows/ci.yml` runs locked install, typecheck, all tests, audit, and packed CLI/Action smoke on Node 22 and 24. |
 | PT-G01, PT-G10 | `packages/hook/test/interception.test.ts`, `runtime.test.ts`, and `transform.test.ts` execute real ESM, CJS, native Promise, error, mutation, worker, and child-process fixtures. |
-| PT-G02, PT-G03 | Schema, capsule, serialization, and property tests plus the 20-run recording test prove strict parsing and byte-identical repetition. |
+| PT-G02, PT-G03 | Schema, capsule, serialization, and property tests plus the 20-run recording test prove strict parsing and byte-identical repetition; `scripts/package-smoke.mjs` parses all three committed v1 goldens through the packed `@prooftape/schema` installed in a clean temporary project. |
 | PT-G14 | Hook child/worker tests and raw-capsule corruption, session, line, file, and byte-limit tests make capture loss explicit. |
 | PT-G04 | `npm run demo` executes both green commands, returns ProofTape exit 2, and verifies the same report/reproduction match key. |
 | PT-G05 | Runtime, diff, report, and compare tests cover mutation, rejection, insertion, deletion, sequence, and ambiguous repeats. |
