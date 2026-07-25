@@ -113,6 +113,13 @@ boundary in [docs/security-model.md](docs/security-model.md), and every release
 gate in [docs/quality-plan.md](docs/quality-plan.md). The protected workflow
 setup is in [docs/github.md](docs/github.md).
 
+Project decisions and review authority are documented in
+[GOVERNANCE.md](GOVERNANCE.md), the supported maintenance window in
+[SUPPORT.md](SUPPORT.md), and release operations in
+[RELEASING.md](RELEASING.md). The prepared alpha is not publishable yet because
+the four new npm names cannot receive a trusted-publisher configuration until
+they exist; that bootstrap blocker is kept explicit in the release procedure.
+
 ## Security
 
 Recorded commands are arbitrary project code. Use a disposable local repository
