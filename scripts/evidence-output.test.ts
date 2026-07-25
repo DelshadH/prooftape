@@ -49,6 +49,9 @@ describe("quality-gate evidence output", () => {
       oidc: true,
       protectedEnvironment: "npm-release",
       exactTag: "v0.1.0-alpha.1",
+      tagBoundRun: true,
+      reviewableEvidenceBeforePublish: true,
+      oidcIsolatedToPublish: true,
       tokenless: true,
       provenancePublish: true,
       passed: true,
@@ -75,6 +78,15 @@ describe("quality-gate evidence output", () => {
         "default: v0.1.0-alpha.2",
       ),
       workflow.replace("ref: ${{ inputs.tag }}", "ref: main"),
+      workflow.replace(
+        "PROOFTAPE_RELEASE_REF: ${{ github.ref }}",
+        "PROOFTAPE_RELEASE_REF: refs/heads/main",
+      ),
+      workflow.replace("needs: prepare", "needs: []"),
+      workflow.replace(
+        "permissions:\n  contents: read",
+        "permissions:\n  contents: read\n  id-token: write",
+      ),
     ];
     for (const candidate of weakened) {
       expect(auditReleaseWorkflow(candidate, "0.1.0-alpha.1").report.passed)

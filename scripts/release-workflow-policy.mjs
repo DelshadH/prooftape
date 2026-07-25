@@ -7,6 +7,9 @@ function escapeRegExp(value) {
 export function auditReleaseWorkflow(text, version) {
   const exactTag = `v${version}`;
   const onBlock = /^on:\s*\r?\n([\s\S]*?)^permissions:/mu.exec(text)?.[1] ?? "";
+  const topPermissions = /^permissions:\s*\r?\n([\s\S]*?)^env:/mu.exec(text)?.[1] ?? "";
+  const prepareBlock = /^  prepare:\s*\r?\n([\s\S]*?)^  publish:/mu.exec(text)?.[1] ?? "";
+  const publishBlock = /^  publish:\s*\r?\n([\s\S]*)$/mu.exec(text)?.[1] ?? "";
   const events = [
     ...onBlock.matchAll(/^ {2}([a-z_]+):/gmu),
   ].map((match) => match[1]);
@@ -15,15 +18,13 @@ export function auditReleaseWorkflow(text, version) {
     && events[0] === "workflow_dispatch"
   );
   const contentsRead = (
-    /^permissions:\s*\r?\n(?:(?: {2}.+)?\r?\n)*? {2}contents:\s*read\s*$/mu
-      .test(text)
+    /^ {2}contents:\s*read\s*$/mu.test(topPermissions)
     && !/\bcontents:\s*write\b/u.test(text)
   );
   const oidc = (
-    /^permissions:\s*\r?\n(?:(?: {2}.+)?\r?\n)*? {2}id-token:\s*write\s*$/mu
-      .test(text)
+    /^ {6}id-token:\s*write\s*$/mu.test(publishBlock)
   );
-  const environmentMatch = /^\s{4}environment:\s*(\S+)\s*$/mu.exec(text);
+  const environmentMatch = /^ {4}environment:\s*(\S+)\s*$/mu.exec(publishBlock);
   const protectedEnvironment = environmentMatch?.[1] ?? "";
   const tagIsExact = (
     text.includes(`RELEASE_VERSION: ${JSON.stringify(version)}`)
@@ -31,6 +32,22 @@ export function auditReleaseWorkflow(text, version) {
     && text.includes("ref: ${{ inputs.tag }}")
     && text.includes('EXPECTED_TAG="v${RELEASE_VERSION}"')
     && text.includes('if [[ "${PROOFTAPE_RELEASE_TAG}" != "${EXPECTED_TAG}" ]]')
+  );
+  const tagBoundRun = (
+    text.includes("PROOFTAPE_RELEASE_REF: ${{ github.ref }}")
+    && text.includes('EXPECTED_REF="refs/tags/${EXPECTED_TAG}"')
+    && text.includes('if [[ "${PROOFTAPE_RELEASE_REF}" != "${EXPECTED_REF}" ]]')
+  );
+  const reviewableEvidenceBeforePublish = (
+    /^ {4}needs:\s*prepare\s*$/mu.test(publishBlock)
+    && prepareBlock.includes("actions/upload-artifact@")
+    && publishBlock.includes("actions/download-artifact@")
+    && !/^ {4}environment:/mu.test(prepareBlock)
+  );
+  const oidcIsolatedToPublish = (
+    !/\bid-token:\s*write\b/u.test(topPermissions)
+    && !/\bid-token:\s*write\b/u.test(prepareBlock)
+    && /^ {6}id-token:\s*write\s*$/mu.test(publishBlock)
   );
   const tokenless = (
     !/\b(?:NODE_AUTH_TOKEN|NPM_TOKEN)\b/u.test(text)
@@ -74,6 +91,9 @@ export function auditReleaseWorkflow(text, version) {
     oidc,
     protectedEnvironment,
     exactTag: tagIsExact ? exactTag : "",
+    tagBoundRun,
+    reviewableEvidenceBeforePublish,
+    oidcIsolatedToPublish,
     tokenless,
     provenancePublish,
     passed: (
@@ -82,6 +102,9 @@ export function auditReleaseWorkflow(text, version) {
       && oidc
       && protectedEnvironment === "npm-release"
       && tagIsExact
+      && tagBoundRun
+      && reviewableEvidenceBeforePublish
+      && oidcIsolatedToPublish
       && tokenless
       && actionsPinned
       && provenancePublish
@@ -96,6 +119,13 @@ export function auditReleaseWorkflow(text, version) {
     failures.push("release must use the npm-release environment");
   }
   if (!tagIsExact) failures.push(`release must validate and check out exact tag ${exactTag}`);
+  if (!tagBoundRun) failures.push("release workflow run must be bound to the exact tag ref");
+  if (!reviewableEvidenceBeforePublish) {
+    failures.push("release evidence must be uploaded before the protected publish job");
+  }
+  if (!oidcIsolatedToPublish) {
+    failures.push("id-token: write must be isolated to the protected publish job");
+  }
   if (!tokenless) failures.push("release must not use npm tokens or workflow secrets");
   if (!actionsPinned) failures.push("release actions must use full commit SHAs");
   if (!provenancePublish) {

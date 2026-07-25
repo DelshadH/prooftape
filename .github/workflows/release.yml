@@ -11,7 +11,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 env:
   RELEASE_VERSION: "0.1.0-alpha.1"
@@ -21,19 +20,26 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  release:
-    name: Publish reviewed alpha with npm provenance
-    environment: npm-release
+  prepare:
+    name: Build reviewed alpha evidence
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - name: Reject any tag other than this release
         env:
+          PROOFTAPE_RELEASE_REF: ${{ github.ref }}
           PROOFTAPE_RELEASE_TAG: ${{ inputs.tag }}
         run: |
           EXPECTED_TAG="v${RELEASE_VERSION}"
+          EXPECTED_REF="refs/tags/${EXPECTED_TAG}"
           if [[ "${PROOFTAPE_RELEASE_TAG}" != "${EXPECTED_TAG}" ]]; then
             echo "Expected ${EXPECTED_TAG}; received ${PROOFTAPE_RELEASE_TAG}" >&2
+            exit 1
+          fi
+          if [[ "${PROOFTAPE_RELEASE_REF}" != "${EXPECTED_REF}" ]]; then
+            echo "Expected workflow ref ${EXPECTED_REF}; received ${PROOFTAPE_RELEASE_REF}" >&2
             exit 1
           fi
       - name: Check out the exact reviewed tag
@@ -47,11 +53,10 @@ jobs:
           PROOFTAPE_RELEASE_TAG: ${{ inputs.tag }}
         run: |
           test "$(git rev-parse HEAD)" = "$(git rev-list -n 1 "${PROOFTAPE_RELEASE_TAG}")"
-      - name: Set up Node and the npm registry
+      - name: Set up Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
-          registry-url: https://registry.npmjs.org
           package-manager-cache: false
       - name: Require npm 11.5.1 or newer
         run: |
@@ -88,6 +93,72 @@ jobs:
           if-no-files-found: error
           retention-days: 30
           compression-level: 0
+
+  publish:
+    name: Publish approved alpha with npm provenance
+    needs: prepare
+    environment: npm-release
+    permissions:
+      contents: read
+      id-token: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Set up Node and the npm registry
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - name: Require npm 11.5.1 or newer
+        run: |
+          node -e '
+            const actual = process.argv[1].split(".").map(Number);
+            const minimum = process.argv[2].split(".").map(Number);
+            const acceptable = actual.some((part, index) =>
+              part > minimum[index] && actual.slice(0, index).every(
+                (prefix, prefixIndex) => prefix === minimum[prefixIndex]
+              )
+            ) || actual.every((part, index) => part === minimum[index]);
+            if (!acceptable) {
+              throw new Error(`npm ${process.argv[2]} or newer is required; found ${process.argv[1]}`);
+            }
+          ' "$(npm --version)" "11.5.1"
+      - name: Download the reviewed release evidence
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: prooftape-0.1.0-alpha.1-release-evidence
+          path: .evidence/release
+      - name: Verify evidence identity, contents, and tarball checksums
+        working-directory: .evidence/release
+        env:
+          PROOFTAPE_EXPECTED_COMMIT: ${{ github.sha }}
+        run: |
+          node -e '
+            const { readFileSync, readdirSync } = require("node:fs");
+            const manifest = JSON.parse(readFileSync("package-manifest.json", "utf8"));
+            const expectedFiles = [
+              "SHA256SUMS",
+              "package-manifest.json",
+              "prooftape-0.1.0-alpha.1.tgz",
+              "prooftape-core-0.1.0-alpha.1.tgz",
+              "prooftape-hook-0.1.0-alpha.1.tgz",
+              "prooftape-schema-0.1.0-alpha.1.tgz",
+              "sbom.cdx.json",
+              "smoke-results.json",
+            ];
+            const actualFiles = readdirSync(".").sort();
+            if (JSON.stringify(actualFiles) !== JSON.stringify(expectedFiles)) {
+              throw new Error("release evidence has an unexpected file set");
+            }
+            if (
+              manifest.commitSha !== process.env.PROOFTAPE_EXPECTED_COMMIT
+              || manifest.version !== "0.1.0-alpha.1"
+            ) {
+              throw new Error("release evidence does not match the tagged commit");
+            }
+          '
+          sha256sum --check SHA256SUMS
       - name: Publish dependency packages, then the CLI, through OIDC
         run: |
           npm publish .evidence/release/prooftape-schema-0.1.0-alpha.1.tgz --access public --provenance --tag alpha
