@@ -1,0 +1,96 @@
+name: Release alpha packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Exact reviewed release tag
+        required: true
+        type: string
+        default: v0.1.0-alpha.1
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  RELEASE_VERSION: "0.1.0-alpha.1"
+
+concurrency:
+  group: prooftape-release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Publish reviewed alpha with npm provenance
+    environment: npm-release
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Reject any tag other than this release
+        env:
+          PROOFTAPE_RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          EXPECTED_TAG="v${RELEASE_VERSION}"
+          if [[ "${PROOFTAPE_RELEASE_TAG}" != "${EXPECTED_TAG}" ]]; then
+            echo "Expected ${EXPECTED_TAG}; received ${PROOFTAPE_RELEASE_TAG}" >&2
+            exit 1
+          fi
+      - name: Check out the exact reviewed tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify HEAD is the selected tag commit
+        env:
+          PROOFTAPE_RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$(git rev-list -n 1 "${PROOFTAPE_RELEASE_TAG}")"
+      - name: Set up Node and the npm registry
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - name: Require npm 11.5.1 or newer
+        run: |
+          node -e '
+            const actual = process.argv[1].split(".").map(Number);
+            const minimum = process.argv[2].split(".").map(Number);
+            const acceptable = actual.some((part, index) =>
+              part > minimum[index] && actual.slice(0, index).every(
+                (prefix, prefixIndex) => prefix === minimum[prefixIndex]
+              )
+            ) || actual.every((part, index) => part === minimum[index]);
+            if (!acceptable) {
+              throw new Error(`npm ${process.argv[2]} or newer is required; found ${process.argv[1]}`);
+            }
+          ' "$(npm --version)" "11.5.1"
+      - name: Install the exact lockfile without lifecycle scripts
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Run the full test contract
+        run: npm run check
+      - name: Test packed CLI and Action consumption
+        run: npm run smoke:package
+      - name: Run dependency, source, secret, and workflow policy checks
+        run: npm run security
+      - name: Prepare bounded release artifacts from this commit
+        run: npm run release:prepare
+      - name: Verify retained tarball checksums
+        working-directory: .evidence/release
+        run: sha256sum --check SHA256SUMS
+      - name: Upload tarballs, checksums, SBOM, manifest, and smoke results
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: prooftape-0.1.0-alpha.1-release-evidence
+          path: .evidence/release
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+      - name: Publish dependency packages, then the CLI, through OIDC
+        run: |
+          npm publish .evidence/release/prooftape-schema-0.1.0-alpha.1.tgz --access public --provenance --tag alpha
+          npm publish .evidence/release/prooftape-core-0.1.0-alpha.1.tgz --access public --provenance --tag alpha
+          npm publish .evidence/release/prooftape-hook-0.1.0-alpha.1.tgz --access public --provenance --tag alpha
+          npm publish .evidence/release/prooftape-0.1.0-alpha.1.tgz --access public --provenance --tag alpha

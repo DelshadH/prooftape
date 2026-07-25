@@ -1,0 +1,33 @@
+# ProofTape 0.1.0-alpha.1
+
+Observation authenticity is not established against code under test. Candidate
+code shares the recorder's process authority and can suppress or forge its own
+captured calls. Exit 0 means only that no blocking difference was observed in
+captured supported calls.
+
+This is an alpha release. The capsule, report, and reproduction-manifest JSON
+shapes are the stable public version 1 contract from this release forward.
+Artifacts made by unpublished `0.0.0` development builds are unsupported.
+
+## Included
+
+- exact base/candidate Git revision recording for one npm dependency;
+- supported direct ESM and CommonJS calls, including native Promise outcomes,
+  errors, argument mutation, call presence, and relative order;
+- strict bounded v1 JSON parsers, canonical hashes, and executable safe
+  reproductions;
+- public exit codes 0, 2, 3, and 4 with explicit unsupported handling;
+- a composite recording Action and isolated three-job reusable workflow;
+- clean-room tarball installation, real changed/unchanged CLI smoke,
+  SHA-256 sums, CycloneDX SBOM, and npm provenance publication.
+
+## Deliberately unsupported
+
+Dynamic imports, re-exports, constructors, tagged templates, optional or
+computed calls, deep members, `call`/`apply`/`bind`, custom prototypes, cycles,
+accessors, and multiple dependencies are outside the alpha contract. The local
+runner is not a sandbox for hostile code.
+
+Use the `alpha` npm distribution tag. Read
+[the product contract](product.md), [schema policy](schema-compatibility.md),
+and [security model](security-model.md) before evaluation.

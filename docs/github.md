@@ -67,3 +67,29 @@ identifies the bytes emitted by the candidate job. It does not prove candidate
 code did not suppress or forge calls before capsule creation. Use the workflow
 as regression evidence only when code under test is not actively evading the
 instrumentation.
+
+## Protected npm release environment
+
+Package publication is separate from comparison execution. Configure npm
+trusted publishing for all four package names with repository
+`DelshadH/prooftape`, workflow `release.yml`, and environment `npm-release`.
+That environment must:
+
+1. require approval from a maintainer who did not author the release commit;
+2. allow only the exact reviewed release tag;
+3. prevent administrator bypass;
+4. contain no npm token or other secret.
+
+The manual release workflow has only `contents: read` and `id-token: write`,
+checks out and verifies the exact `v0.1.0-alpha.1` tag, rejects older npm clients
+that cannot use trusted publishing, rebuilds all evidence, and publishes the
+four tarballs in dependency order with provenance. See
+[RELEASING.md](../RELEASING.md) for the approval sequence and
+[the compromise procedure](compromised-release.md) for containment and
+replacement.
+
+The policy workflow is prepared but cannot yet authenticate a first publish:
+all four npm package names were absent on 2026-07-25, and npm requires a package
+to exist before adding its trusted publisher. This conflict must be resolved by
+explicit review before a tag or dispatch; it must not be bypassed with a hidden
+token. The exact blocker is maintained in [RELEASING.md](../RELEASING.md).
