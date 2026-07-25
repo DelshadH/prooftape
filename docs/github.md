@@ -94,16 +94,20 @@ administrator bypass are disabled, and the environment has zero secrets and
 zero variables. `main` also requires an up-to-date pull request, one approval,
 the three documented CI checks, stale-review dismissal, last-push approval,
 conversation resolution, and administrator enforcement; force pushes and
-deletion are disabled.
+deletion are disabled. A no-bypass tag ruleset prevents update or deletion of
+`v0.1.0-alpha.1` after its reviewed creation.
 
 The repository currently has one collaborator. That account cannot approve its
 own environment deployment, so a second qualified maintainer is an intentional
 release blocker rather than a reason to relax the controls.
 
-The manual release workflow has only `contents: read` and `id-token: write`,
-checks out and verifies the exact `v0.1.0-alpha.1` tag, rejects older npm clients
-that cannot use trusted publishing, rebuilds all evidence, and publishes the
-four tarballs in dependency order with provenance. See
+The manual release workflow binds both the run and checkout to the exact
+`v0.1.0-alpha.1` tag. Its read-only preparation job rebuilds and uploads all
+evidence before approval. The protected publish job alone receives
+`id-token: write`; it downloads the same-run artifact, verifies its exact file
+set, tagged commit, version, and tarball checksums, rejects older npm clients
+that cannot use trusted publishing, and publishes the four tarballs in
+dependency order with provenance. See
 [RELEASING.md](../RELEASING.md) for the approval sequence and
 [the compromise procedure](compromised-release.md) for containment and
 replacement.

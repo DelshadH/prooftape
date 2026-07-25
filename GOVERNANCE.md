@@ -39,6 +39,8 @@ The following GitHub settings were read back after configuration on
   deletion are disabled;
 - `npm-release` prevents self-review and administrator bypass, contains no
   secret or variable, and permits only tag `v0.1.0-alpha.1`;
+- an active tag ruleset with no bypass prevents update or deletion of
+  `v0.1.0-alpha.1` after creation while still allowing its reviewed creation;
 
 The repository currently has only one collaborator. Because that collaborator
 is also the configured environment reviewer and self-review is prevented,

@@ -5,6 +5,11 @@ publication path is `.github/workflows/release.yml` running on a GitHub-hosted
 runner in the protected `npm-release` environment with npm trusted publishing.
 No npm token belongs in GitHub, local configuration, or the workflow.
 
+The release run has two jobs. The read-only `prepare` job rebuilds and uploads
+the tarballs, checksums, package manifest, smoke results, and SBOM. Only after
+that evidence exists does the `publish` job wait for `npm-release` approval.
+Only `publish` receives `id-token: write`.
+
 ## One-time trusted-publisher setup
 
 For each package (`@prooftape/schema`, `@prooftape/core`, `@prooftape/hook`, and
@@ -19,6 +24,8 @@ The `npm-release` GitHub environment was configured and read back on
 2026-07-25. It permits only tag `v0.1.0-alpha.1`, prevents self-review and
 administrator bypass, and contains no secret or variable. It must retain a
 maintainer who did not author the release commit as its required reviewer.
+An active no-bypass tag ruleset permits the reviewed creation of
+`v0.1.0-alpha.1` but prevents its later update or deletion.
 
 ### Current independent-review blocker
 
@@ -73,12 +80,18 @@ requirements are documented in
 6. Dispatch the protected workflow and supply the exact tag:
 
    ```bash
-   gh workflow run release.yml --ref main -f tag=v0.1.0-alpha.1
+   gh workflow run release.yml --ref v0.1.0-alpha.1 -f tag=v0.1.0-alpha.1
    gh run watch --exit-status
    ```
 
-7. The independent environment reviewer checks the tag, evidence artifact, and
-   workflow diff before approving the publish job.
+   Both `--ref` and `tag` must name the same exact release tag. The workflow
+   rejects another triggering ref before checkout, and the environment permits
+   no branch deployment.
+
+7. While `publish` waits for environment approval, the independent reviewer
+   checks the exact tag, the completed `prepare` job, its evidence artifact,
+   checksums, package manifest, SBOM, and workflow diff. Only then may the
+   reviewer approve `publish`.
 8. After publication, confirm all four registry versions use the `alpha`
    distribution tag, expose provenance, and match the release notes. Do not
    move `latest` during the alpha.

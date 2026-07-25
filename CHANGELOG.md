@@ -10,7 +10,9 @@
   and licenses, bounded clean-room tarball preparation, SHA-256 sums, a
   CycloneDX SBOM, and installed-package CLI/exit-contract smoke.
 - Added a protected, tokenless npm trusted-publishing workflow with GitHub OIDC
-  provenance and the `alpha` distribution tag.
+  provenance and the `alpha` distribution tag. Release evidence is built and
+  uploaded before approval; OIDC permission exists only in the protected
+  publication job.
 - Implemented strict version 1 capsule and report parsers, canonical JSON,
   bounded value serialization, redaction, and audited literal normalization.
 - Implemented ESM and CommonJS application-call instrumentation with explicit
