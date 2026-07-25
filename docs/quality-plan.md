@@ -4,7 +4,7 @@ Each requirement below needs an automated verifier and compact, reproducible
 evidence. A passing unit test alone is not enough for an integration or security
 claim.
 
-| Gate | Required proof | Release condition |
+| Gate | Required evidence | Release condition |
 |---|---|---|
 | PT-G13 | Clean toolchain and package bootstrap | Fresh Linux checkouts run locked install, typecheck, tests, package smoke, and CLI smoke on Node 22 and 24. |
 | PT-G01 | ESM and CJS interception feasibility | Supported sync/async calls are observed on Node 22 and 24 without changing outcomes, descriptors used by fixtures, or `this` behavior. |
@@ -16,7 +16,7 @@ claim.
 | PT-G06 | Normalization audit | UUID/timestamp/path fixture is stable only when configured; report lists each transformation and never normalizes undeclared semantic fields. |
 | PT-G07 | Baseline integrity and authenticity boundary | Candidate code cannot retroactively change the held base capsule. A same-run adversarial fixture proves candidate code can forge its own raw stream; every capsule, report, reproduction manifest, and CLI verdict must explicitly mark observation authenticity as not established. Separate-job hashes are claimed only as transport integrity. |
 | PT-G08 | Real package evidence | Three isolated real npm upgrade fixtures; at least one is tied to a documented historical behavioral regression or breaking change, with source and reproducible lockfiles. |
-| PT-G09 | Security and privacy | Secret canaries never appear in raw/canonical reports; untrusted workflow has no secrets/write token; path traversal, oversized events, cycles, and malformed capsules are rejected. |
+| PT-G09 | Security and privacy | Secret canaries never appear in raw/canonical reports; candidate-execution jobs have no secrets/write token; path traversal, oversized events, cycles, and malformed capsules are rejected. |
 | PT-G10 | Semantic transparency | Instrumented and uninstrumented supported fixtures have equal outcomes, visible exports, property descriptors required by contract, and error identity fields. |
 | PT-G11 | Performance budget | Median wall-clock overhead is ≤2.0× on the published synthetic fixture; report includes raw samples and environment. This is a budget, not a universal claim. |
 | PT-G12 | Clean-room release | Linux clean checkout runs install, full tests, killer demo, package smoke test, and generated 15–20 second terminal recording from one command. |

@@ -115,7 +115,9 @@ least-privilege jobs. A third job checks producing-job SHA-256 values, parses
 bounded schemas, and performs the diff with a pinned verifier. This protects
 the already-produced base artifact and transport integrity. The candidate-job
 hash proves which bytes that job emitted; it does not prove those observations
-were genuine.
+were genuine. The composite Action output and verifier job summary state
+`not-established` and label canonical capsule hashes separately from complete
+artifact transport hashes.
 
 ## Non-goals
 

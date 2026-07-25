@@ -26,6 +26,9 @@ outputs:
   capsule-sha256:
     description: SHA-256 for checking capsule transport; it does not authenticate observations
     value: ${{ steps.record.outputs.capsule-sha256 }}
+  observation-authenticity:
+    description: Observation authorship is not established against code under test
+    value: ${{ steps.record.outputs.observation-authenticity }}
 runs:
   using: composite
   steps:

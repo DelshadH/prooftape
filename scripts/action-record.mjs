@@ -69,7 +69,12 @@ const githubOutput = process.env.GITHUB_OUTPUT;
 if (githubOutput) {
   await appendFile(
     githubOutput,
-    `capsule-path=${outputPath}\ncapsule-sha256=${capsuleSha256}\n`,
+    [
+      `capsule-path=${outputPath}`,
+      `capsule-sha256=${capsuleSha256}`,
+      "observation-authenticity=not-established",
+      "",
+    ].join("\n"),
     "utf8",
   );
 }

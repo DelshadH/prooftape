@@ -61,7 +61,11 @@ Every capsule and report records
 `"observationAuthenticity": "not-established"`, and every successful
 record/diff/compare command prints the same warning. The separate-job workflow
 still protects already-recorded base evidence and artifact transport from the
-candidate; it does not turn candidate observations into an attestation.
+candidate; it does not turn candidate observations into an attestation. The
+composite Action exposes `observation-authenticity=not-established`, and the
+workflow job summary repeats the warning beside the exact revisions, dependency
+versions, canonical capsule hashes, artifact transport hashes, verdict, and exit
+code.
 
 ## What is supported
 
@@ -84,7 +88,7 @@ Exit codes are part of the public contract:
 - `3`: the harness, command, instrumentation, isolation, or matching failed.
 - `4`: input is invalid or an observed surface is unsupported.
 
-## Reproducible proof
+## Reproducible release evidence
 
 ```bash
 npm run check

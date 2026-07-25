@@ -143,6 +143,7 @@ try {
     || actionCapsule.calls?.length !== 1
     || actionCapsule.metadata?.observationAuthenticity !== "not-established"
     || !/capsule-sha256=[a-f0-9]{64}/u.test(outputMetadata)
+    || !outputMetadata.includes("observation-authenticity=not-established\n")
   ) {
     throw new Error("composite Action helper smoke produced invalid evidence");
   }
