@@ -50,7 +50,7 @@ jobs:
       capsule_sha256: ${{ steps.record.outputs.capsule-sha256 }}
     steps:
       - name: Check out pinned ProofTape
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4.2.2
         with:
           repository: DelshadH/prooftape
           ref: 788a7e09cb57aa9da716b33e9dbd07002eb8f508
@@ -73,7 +73,7 @@ jobs:
           PROOFTAPE_COMMAND: ${{ inputs.command }}
         run: node tool/scripts/workflow-inputs.mjs
       - name: Check out exact base
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4.2.2
         with:
           ref: ${{ inputs.base_ref }}
           path: target
@@ -107,7 +107,7 @@ jobs:
       capsule_sha256: ${{ steps.record.outputs.capsule-sha256 }}
     steps:
       - name: Check out pinned ProofTape
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4.2.2
         with:
           repository: DelshadH/prooftape
           ref: 788a7e09cb57aa9da716b33e9dbd07002eb8f508
@@ -130,7 +130,7 @@ jobs:
           PROOFTAPE_COMMAND: ${{ inputs.command }}
         run: node tool/scripts/workflow-inputs.mjs
       - name: Check out exact candidate
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4.2.2
         with:
           ref: ${{ inputs.candidate_ref }}
           path: target
@@ -163,7 +163,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Check out pinned ProofTape
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4.2.2
         with:
           repository: DelshadH/prooftape
           ref: 788a7e09cb57aa9da716b33e9dbd07002eb8f508
