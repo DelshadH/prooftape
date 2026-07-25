@@ -53,7 +53,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
         with:
           repository: DelshadH/prooftape
-          ref: a2348ef6671991fe227d4c4fdb0c5016e2c50c1c
+          ref: 788a7e09cb57aa9da716b33e9dbd07002eb8f508
           path: tool
           persist-credentials: false
       - name: Set up Node
@@ -110,7 +110,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
         with:
           repository: DelshadH/prooftape
-          ref: a2348ef6671991fe227d4c4fdb0c5016e2c50c1c
+          ref: 788a7e09cb57aa9da716b33e9dbd07002eb8f508
           path: tool
           persist-credentials: false
       - name: Set up Node
@@ -166,7 +166,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
         with:
           repository: DelshadH/prooftape
-          ref: a2348ef6671991fe227d4c4fdb0c5016e2c50c1c
+          ref: 788a7e09cb57aa9da716b33e9dbd07002eb8f508
           path: tool
           persist-credentials: false
       - name: Set up Node
