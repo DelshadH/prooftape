@@ -28,13 +28,24 @@ release commit must review release-affecting changes and approve the environment
 deployment. A tag is created only after that review. No maintainer or automation
 account bypasses these controls.
 
-The following repository settings are prerequisites, not claims about the
-current GitHub configuration:
+The following GitHub settings were read back after configuration on
+2026-07-25:
 
 - `main` requires a pull request, one approval, and dismissal of stale reviews;
 - required checks are `checks (22)`, `checks (24)`, and `quality-gates`;
-- automation cannot bypass the rules;
-- `npm-release` requires an independent deployment approval;
+- required checks must be current with `main`;
+- the last pusher cannot supply the required approval;
+- administrators are subject to the `main` rules, and force pushes and branch
+  deletion are disabled;
+- `npm-release` prevents self-review and administrator bypass, contains no
+  secret or variable, and permits only tag `v0.1.0-alpha.1`;
+
+The repository currently has only one collaborator. Because that collaborator
+is also the configured environment reviewer and self-review is prevented,
+`npm-release` cannot deploy until a second qualified maintainer is added and
+configured as the independent reviewer. The following external prerequisites
+also remain incomplete:
+
 - each npm trusted publisher is restricted to
   `.github/workflows/release.yml` and `npm-release`;
 - `v0.1.0-alpha.1` is created only after release approval.
