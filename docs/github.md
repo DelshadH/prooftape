@@ -21,7 +21,7 @@ permissions:
 
 jobs:
   comparison:
-    uses: DelshadH/prooftape/.github/workflows/prooftape.yml@2a36f9dc82a281c4c6002798a978861d7aee63a2
+    uses: DelshadH/prooftape/.github/workflows/prooftape.yml@a57603a585abe693d81b1a80e1f71335760eca12
     permissions:
       contents: read
     with:
