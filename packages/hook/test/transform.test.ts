@@ -98,6 +98,29 @@ describe("transformApplicationSource", () => {
       .toBe(switchScope);
   });
 
+  it("still attributes a dependency call in a switch discriminant", () => {
+    const source = [
+      'import { add } from "fixture";',
+      "switch (add(1, 2)) { case 3: const add = () => 0; break; }",
+    ].join("\n");
+
+    const result = transformApplicationSource(source, { ...options, format: "module" });
+
+    expect(result.issues).toEqual([]);
+    expect(result.source).toContain('__prooftapeRuntime.invoke("fixture","add"');
+  });
+
+  it("does not attribute a named class expression self-binding to the dependency", () => {
+    const source = [
+      'import { add } from "fixture";',
+      "const Local = class add { static run() { return add.value(2); } };",
+      "Local.run();",
+    ].join("\n");
+
+    expect(transformApplicationSource(source, { ...options, format: "module" }).source)
+      .toBe(source);
+  });
+
   it("rejects function-scoped CommonJS bindings instead of silently partially capturing", () => {
     const source = [
       'const stable = require("fixture");',
@@ -221,6 +244,33 @@ describe("transformApplicationSource", () => {
     ].join("\n");
     expect(
       transformApplicationSource(destructured, { ...options, format: "commonjs" }).issues,
+    ).toContainEqual({
+      code: "PT_UNSUPPORTED_REASSIGNMENT",
+      message: "reassigned dependency bindings cannot be attributed transparently",
+    });
+
+    const memberDestructuring = [
+      'const fixture = require("fixture");',
+      "const local = (value) => value * 3;",
+      "[fixture.add] = [local];",
+      "fixture.add(2);",
+    ].join("\n");
+    expect(
+      transformApplicationSource(memberDestructuring, { ...options, format: "commonjs" }).issues,
+    ).toContainEqual({
+      code: "PT_UNSUPPORTED_REASSIGNMENT",
+      message: "reassigned dependency bindings cannot be attributed transparently",
+    });
+
+    const loopMemberDestructuring = [
+      'const fixture = require("fixture");',
+      "for ([fixture.add] of [[(value) => value * 3]]) { fixture.add(2); }",
+    ].join("\n");
+    expect(
+      transformApplicationSource(
+        loopMemberDestructuring,
+        { ...options, format: "commonjs" },
+      ).issues,
     ).toContainEqual({
       code: "PT_UNSUPPORTED_REASSIGNMENT",
       message: "reassigned dependency bindings cannot be attributed transparently",
