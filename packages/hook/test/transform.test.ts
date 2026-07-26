@@ -292,6 +292,17 @@ describe("transformApplicationSource", () => {
         "delete fixture.add;",
         "fixture.add(2);",
       ].join("\n"),
+      [
+        'var fixture = require("fixture");',
+        "const local = (value) => value * 3;",
+        "if (true) { var fixture = local; }",
+        "fixture(2);",
+      ].join("\n"),
+      [
+        'const fixture = require("fixture");',
+        "delete fixture?.add;",
+        "fixture.add(2);",
+      ].join("\n"),
     ]) {
       expect(
         transformApplicationSource(source, { ...options, format: "commonjs" }).issues,

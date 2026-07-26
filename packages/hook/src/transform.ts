@@ -170,6 +170,7 @@ function runtimeInjectionOffset(root: AstNode, source: string): number {
 
 function rootIdentifier(value: unknown): string | undefined {
   let current = node(value);
+  while (current?.type === "ChainExpression") current = node(current.expression);
   while (current?.type === "MemberExpression") current = node(current.object);
   return nameOf(current);
 }
@@ -207,7 +208,11 @@ function patternNames(value: unknown): readonly string[] {
 function assignmentRootNames(value: unknown): readonly string[] {
   const target = node(value);
   if (!target) return [];
-  if (target.type === "Identifier" || target.type === "MemberExpression") {
+  if (
+    target.type === "Identifier"
+    || target.type === "MemberExpression"
+    || target.type === "ChainExpression"
+  ) {
     const root = rootIdentifier(target);
     return root === undefined ? [] : [root];
   }
@@ -290,7 +295,10 @@ function directScopeDeclarations(scope: AstNode): readonly string[] {
   for (const statementValue of Array.isArray(body) ? body : []) {
     const statement = node(statementValue);
     if (!statement) continue;
-    if (statement.type === "VariableDeclaration") {
+    if (
+      statement.type === "VariableDeclaration"
+      && (scope.type === "Program" || statement.kind !== "var")
+    ) {
       for (const declarationValue of Array.isArray(statement.declarations)
         ? statement.declarations
         : []) {
