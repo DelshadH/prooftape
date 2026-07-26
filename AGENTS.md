@@ -66,3 +66,15 @@ tests exercise the real implementation, documentation matches behavior, and the
 relevant proof in `docs/quality-plan.md` is reproducible. Before release, run the
 full test matrix, dependency audit, secret scan, package smoke test, hostile-input
 tests, and a clean-room killer demo.
+
+## Autonomous alpha-release policy
+
+- Human code review, additional maintainers, external adoption, and public pilots
+  are not technical alpha-release prerequisites.
+- Use fresh-context independent AI reviewers and exact-head CI as the technical
+  review gate. Record this honestly as AI review, never as human approval.
+- Complete all available engineering, repository, CI, packaging, documentation,
+  and security work before asking the owner only `PUBLISH? YES / NO`.
+- Registry authentication may be reported as unavailable, but it does not justify
+  stopping GitHub-side or technical release-candidate work.
+- Do not create a release tag or GitHub release before the owner says PUBLISH.

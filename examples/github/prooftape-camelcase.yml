@@ -1,0 +1,19 @@
+name: Dependency behavior
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  comparison:
+    uses: DelshadH/prooftape/.github/workflows/prooftape.yml@61bc99d6a1ace58e706f5e20ea91d89a84116faf
+    permissions:
+      contents: read
+    with:
+      base_ref: ${{ github.event.pull_request.base.sha }}
+      candidate_ref: ${{ github.event.pull_request.head.sha }}
+      dependency: camelcase
+      command: npm test

@@ -1,0 +1,11 @@
+{
+  "name": "prooftape-consumer-child-process-example",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node parent.mjs"
+  },
+  "dependencies": {
+    "ms": "2.1.2"
+  }
+}

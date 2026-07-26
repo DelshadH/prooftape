@@ -7,8 +7,8 @@ No npm token belongs in GitHub, local configuration, or the workflow.
 
 The release run has two jobs. The read-only `prepare` job rebuilds and uploads
 the tarballs, checksums, package manifest, smoke results, and SBOM. Only after
-that evidence exists does the `publish` job wait for `npm-release` approval.
-Only `publish` receives `id-token: write`.
+that evidence exists may the `publish` job run in `npm-release`. Only `publish`
+receives `id-token: write`.
 
 ## One-time trusted-publisher setup
 
@@ -20,64 +20,61 @@ For each package (`@prooftape/schema`, `@prooftape/core`, `@prooftape/hook`, and
 - workflow filename `release.yml`;
 - GitHub environment `npm-release`.
 
-The `npm-release` GitHub environment was configured and read back on
-2026-07-25. It permits only tag `v0.1.0-alpha.1`, prevents self-review and
-administrator bypass, and contains no secret or variable. It must retain a
-maintainer who did not author the release commit as its required reviewer.
-An active no-bypass tag ruleset permits the reviewed creation of
+The `npm-release` GitHub environment was read back on 2026-07-26. It permits
+only tag `v0.1.0-alpha.1` and contains no secret or variable. It has no required
+human reviewer. An active no-bypass tag ruleset permits the owner-authorized
+creation of
 `v0.1.0-alpha.1` but prevents its later update or deletion.
-
-### Current independent-review blocker
-
-The repository currently has one collaborator. That account is the configured
-environment reviewer, but the environment correctly rejects self-approval. Add
-and validate a second maintainer, then configure that maintainer as a required
-reviewer before creating the release tag or dispatching the workflow. Do not
-weaken self-review or administrator-bypass protection to work around this
-blocker.
 
 ### Current first-publish blocker
 
-As of 2026-07-25, registry lookups for all four package names return `E404`.
+As of 2026-07-26, registry lookups for all four package names return `E404`,
+and `npm whoami` reports no authenticated account.
 npm requires a package to exist before a trusted publisher can be configured.
 The tokenless workflow therefore cannot authenticate the first publication,
-even though first publications may carry provenance. Do not dispatch the release
-workflow until this bootstrap conflict has an explicitly reviewed resolution.
-In particular, do not silently add an npm token or publish from a workstation
-to make the workflow green.
+even though first publications may carry provenance.
 
-This is an external readiness blocker, not a code failure. The applicable npm
-requirements are documented in
+**REGISTRY AUTHENTICATION UNAVAILABLE**
+
+This is a registry-only limitation, not a technical alpha-release or GitHub
+release blocker. Do not silently add a token or publish from a workstation.
+The applicable npm requirements are documented in
 [trusted publishing](https://docs.npmjs.com/trusted-publishers/) and
 [`npm trust`](https://docs.npmjs.com/cli/v11/commands/npm-trust/).
 
-## Review and approval order
+## Technical review and publication order
 
-1. Resolve and review the first-publish blocker above.
-2. Merge only a reviewed release PR after all required checks pass.
-3. From a fresh clone of the reviewed commit, reproduce the non-publishing
+1. Freeze the exact SHA, complete the required independent AI review, remediate
+   validated blockers, and merge only after all exact-head checks pass.
+2. From a fresh clone of the reviewed commit, reproduce the non-publishing
    gates:
 
    ```bash
    npm ci --ignore-scripts
    npm run check
    npm run smoke:package
+   npm run smoke:examples
+   npm run corpus
    npm run security
    npm run release:prepare
    ```
 
-4. Inspect `.evidence/release/package-manifest.json`, `SHA256SUMS`,
+3. Inspect `.evidence/release/package-manifest.json`, `SHA256SUMS`,
    `sbom.cdx.json`, and `smoke-results.json`. Confirm the manifest commit is the
    reviewed commit and every tarball contains only `package.json`, `README.md`,
    `LICENSE`, and intended `dist` files.
-5. Create the immutable release tag only after review approval:
+4. Present the release decision packet. If the owner says `DO NOT PUBLISH`,
+   leave the verified commit intact and stop. If the owner says `PUBLISH`,
+   create the immutable release tag:
 
    ```bash
    git tag -a v0.1.0-alpha.1 -m "ProofTape 0.1.0-alpha.1"
    git push origin v0.1.0-alpha.1
    ```
 
-6. Dispatch the protected workflow and supply the exact tag:
+5. Create the GitHub release with the verified tarballs, checksums, SBOM, and
+   release notes. If registry authentication is available, dispatch the
+   protected workflow and supply the exact tag:
 
    ```bash
    gh workflow run release.yml --ref v0.1.0-alpha.1 -f tag=v0.1.0-alpha.1
@@ -88,11 +85,10 @@ requirements are documented in
    rejects another triggering ref before checkout, and the environment permits
    no branch deployment.
 
-7. While `publish` waits for environment approval, the independent reviewer
-   checks the exact tag, the completed `prepare` job, its evidence artifact,
-   checksums, package manifest, SBOM, and workflow diff. Only then may the
-   reviewer approve `publish`.
-8. After publication, confirm all four registry versions use the `alpha`
+6. If registry authentication remains unavailable, retain the verified GitHub
+   release and report the registry-only limitation without changing the
+   technical assessment.
+7. After npm publication, confirm all four registry versions use the `alpha`
    distribution tag, expose provenance, and match the release notes. Do not
    move `latest` during the alpha.
 

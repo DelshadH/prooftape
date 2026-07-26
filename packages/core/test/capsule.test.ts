@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import type { CallObservationV1, EvidenceMetadataV1 } from "@prooftape/schema";
+import type { EvidenceMetadataV1, RawCallObservationV1 } from "@prooftape/schema";
 import {
   CaptureMergeError,
   canonicalCapsule,
@@ -27,7 +27,7 @@ const metadata: EvidenceMetadataV1 = {
   observationAuthenticity: "not-established",
 };
 
-function call(processId: string, sequence: number, value: unknown): CallObservationV1 {
+function call(processId: string, sequence: number, value: unknown): RawCallObservationV1 {
   return {
     schemaVersion: "1",
     callId: `${processId}:${sequence}`,
@@ -44,7 +44,7 @@ function call(processId: string, sequence: number, value: unknown): CallObservat
   };
 }
 
-function raw(sessionId: string, observation: CallObservationV1): string {
+function raw(sessionId: string, observation: unknown): string {
   return `${JSON.stringify({
     schemaVersion: "1",
     kind: "call",
@@ -54,6 +54,29 @@ function raw(sessionId: string, observation: CallObservationV1): string {
 }
 
 describe("mergeRawDirectory", () => {
+  it("requires a bounded decimal duration in every raw call", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "prooftape-merge-"));
+    const {
+      durationNanoseconds: _durationNanoseconds,
+      ...withoutDuration
+    } = call("1", 1, null);
+    await writeFile(
+      join(directory, "raw-session00-1.jsonl"),
+      raw("session00", withoutDuration),
+    );
+
+    await expect(mergeRawDirectory(directory, "session00", metadata))
+      .rejects.toThrow(/durationNanoseconds/);
+
+    await writeFile(
+      join(directory, "raw-session00-1.jsonl"),
+      raw("session00", { ...call("1", 1, null), durationNanoseconds: "1e9" }),
+    );
+
+    await expect(mergeRawDirectory(directory, "session00", metadata))
+      .rejects.toThrow(/durationNanoseconds/);
+  });
+
   it("normalizes process IDs and removes timing for byte-identical capsules", async () => {
     const root = await mkdtemp(join(tmpdir(), "prooftape-merge-"));
     const first = join(root, "first");
@@ -75,7 +98,11 @@ describe("mergeRawDirectory", () => {
     const two = await mergeRawDirectory(second, "session01", metadata);
 
     expect(one.capsule.calls.map((item) => item.processId)).toEqual(["p1", "p2"]);
-    expect(one.capsule.calls.every((item) => item.durationNanoseconds === undefined)).toBe(true);
+    expect(
+      one.capsule.calls.every(
+        (item) => !Object.prototype.hasOwnProperty.call(item, "durationNanoseconds"),
+      ),
+    ).toBe(true);
     expect(canonicalCapsule(one.capsule)).toBe(canonicalCapsule(two.capsule));
     expect(one.capsuleHash).toBe(sha256(canonicalCapsule(one.capsule)));
   });
@@ -102,6 +129,18 @@ describe("mergeRawDirectory", () => {
     await writeFile(join(malformed, "raw-session03-1.jsonl"), '{"kind":"call"}\n');
     await expect(mergeRawDirectory(malformed, "session03", metadata))
       .rejects.toBeInstanceOf(CaptureMergeError);
+
+    const malformedUtf8 = await mkdtemp(join(tmpdir(), "prooftape-merge-"));
+    const malformedUtf8Bytes = Buffer.from(raw("session03", call("1", 1, "marker")));
+    const markerIndex = malformedUtf8Bytes.indexOf("marker");
+    if (markerIndex < 0) throw new Error("raw UTF-8 test marker was not found");
+    malformedUtf8Bytes[markerIndex] = 0xff;
+    await writeFile(
+      join(malformedUtf8, "raw-session03-1.jsonl"),
+      malformedUtf8Bytes,
+    );
+    await expect(mergeRawDirectory(malformedUtf8, "session03", metadata))
+      .rejects.toThrow(/UTF-8/);
 
     const wrongSession = await mkdtemp(join(tmpdir(), "prooftape-merge-"));
     await writeFile(

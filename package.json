@@ -16,9 +16,11 @@
     "test": "npm run build && vitest run",
     "check": "npm run typecheck && npm test",
     "smoke:package": "node scripts/package-smoke.mjs",
+    "smoke:examples": "node scripts/consumer-examples-smoke.mjs",
     "release:prepare": "node scripts/release-pack.mjs --out .evidence/release --replace",
     "demo": "npm run build && node scripts/killer-demo.mjs",
     "demo:record": "npm run build && node scripts/killer-demo.mjs --record .evidence/killer-demo.cast --replace",
+    "corpus": "npm run build && node scripts/compatibility-corpus.mjs --out .evidence/compatibility-corpus.json --replace",
     "performance": "npm run build && node scripts/performance-gate.mjs --out .evidence/performance.json --replace",
     "security": "npm audit --audit-level=high && node scripts/security-audit.mjs --out .evidence/security.json --replace",
     "real-upgrades": "npm run build && node scripts/real-upgrade-gates.mjs --out .evidence/real-upgrades.json --replace"

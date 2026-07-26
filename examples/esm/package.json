@@ -1,0 +1,11 @@
+{
+  "name": "prooftape-consumer-esm-example",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node app.mjs"
+  },
+  "dependencies": {
+    "camelcase": "6.3.0"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended"
+  ],
+  "packageRules": [
+    {
+      "description": "Run the protected ProofTape PR check for npm upgrades",
+      "matchManagers": [
+        "npm"
+      ],
+      "enabled": true
+    }
+  ]
+}

@@ -20,24 +20,26 @@ infrastructure compromise.
 
 ## Restore
 
-1. Establish a second verified maintainer before restoring release authority.
+1. Restore release authority only after a frozen-SHA independent technical
+   review and all required checks pass. A second verified maintainer is useful
+   defense in depth when available, but is not an alpha-release prerequisite.
 2. Compare protected branches and release tags with independently retained
    clones and published provenance. Investigate every unexplained difference.
 3. Restore branch and environment rules from [GOVERNANCE.md](../GOVERNANCE.md)
    and [docs/github.md](github.md).
 4. Recreate the npm trusted publisher with the exact repository, workflow
    filename, environment, and allowed publish action.
-5. Run the complete clean-room gates and review every release artifact before
-   approving another tag.
+5. Run the complete clean-room gates and independently review every release
+   artifact before presenting another owner `PUBLISH` decision.
 6. If any published version may be affected, use
    [the compromised-release procedure](compromised-release.md), deprecate it,
    and issue a security advisory when users may need to act.
 
 ## Validate a successor
 
-The outgoing and incoming maintainers, or two independent remaining
-maintainers, verify owner access, required checks, private advisory access,
-environment approval, npm ownership, trusted-publisher configuration, and a
-non-publishing release rehearsal. Record completion in a reviewed issue or pull
-request without account identifiers, private contacts, secrets, or recovery
-codes.
+The repository owner verifies owner access, required checks, private advisory
+access, environment policy, npm ownership, trusted-publisher configuration, and
+a non-publishing release rehearsal. A fresh-context independent AI reviewer
+checks the recorded non-secret evidence. Record completion in a reviewed issue
+or pull request without account identifiers, private contacts, secrets, or
+recovery codes.

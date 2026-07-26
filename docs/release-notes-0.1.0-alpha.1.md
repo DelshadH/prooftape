@@ -19,7 +19,9 @@ Artifacts made by unpublished `0.0.0` development builds are unsupported.
 - public exit codes 0, 2, 3, and 4 with explicit unsupported handling;
 - a composite recording Action and isolated three-job reusable workflow;
 - clean-room tarball installation, real changed/unchanged CLI smoke,
-  SHA-256 sums, CycloneDX SBOM, and npm provenance publication.
+  SHA-256 sums, CycloneDX SBOM, and npm provenance publication;
+- a public changed/clean/hostile compatibility corpus and standalone ESM,
+  CommonJS, child-process, Dependabot, and Renovate examples.
 
 ## Deliberately unsupported
 

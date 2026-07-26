@@ -1,6 +1,18 @@
 import type { BehaviorDiffV1, CallObservationV1 } from "@prooftape/schema";
 import { canonicalJson, sha256 } from "./canonical.js";
 
+export interface AmbiguousCallDiff {
+  readonly schemaVersion: "1";
+  readonly kind: "ambiguous";
+  readonly blocking: true;
+  readonly matchKey: string;
+  readonly base?: CallObservationV1;
+  readonly candidate?: CallObservationV1;
+  readonly summary: string;
+}
+
+export type CallDiff = BehaviorDiffV1 | AmbiguousCallDiff;
+
 function comparable(value: unknown): string {
   return canonicalJson(value as never);
 }
@@ -101,14 +113,14 @@ function groupCalls(
 export function diffCalls(
   baseCalls: readonly CallObservationV1[],
   candidateCalls: readonly CallObservationV1[],
-): readonly BehaviorDiffV1[] {
+): readonly CallDiff[] {
   const baseGroups = groupCalls(baseCalls);
   const candidateGroups = groupCalls(candidateCalls);
   const keys = [...new Set([...baseGroups.keys(), ...candidateGroups.keys()])].sort();
   const matchedDiffs: BehaviorDiffV1[] = [];
   const added: BehaviorDiffV1[] = [];
   const removed: BehaviorDiffV1[] = [];
-  const ambiguous: BehaviorDiffV1[] = [];
+  const ambiguous: AmbiguousCallDiff[] = [];
   const baseOrder: string[] = [];
   const candidateOrder: Array<{ id: string; index: number }> = [];
 

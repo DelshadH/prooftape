@@ -59,9 +59,7 @@ function stableProcessSignature(calls: readonly CallObservationV1[]): string {
   const stable = calls
     .slice()
     .sort((left, right) => left.sequence - right.sequence)
-    .map(({ callId: _callId, processId: _processId, durationNanoseconds: _duration, ...call }) =>
-      call
-    );
+    .map(({ callId: _callId, processId: _processId, ...call }) => call);
   return sha256(canonicalJson(stable as unknown as JsonValue));
 }
 
@@ -72,7 +70,7 @@ function normalizeProcess(
   return calls
     .slice()
     .sort((left, right) => left.sequence - right.sequence)
-    .map(({ durationNanoseconds: _duration, ...call }) => ({
+    .map((call) => ({
       ...call,
       processId,
       callId: `${processId}:${call.sequence}`,
@@ -126,7 +124,12 @@ export async function mergeRawDirectory(
       throw new CaptureMergeError("raw observation file changed during verification");
     }
     if (bytes.length === 0) continue;
-    const text = bytes.toString("utf8");
+    let text: string;
+    try {
+      text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    } catch {
+      throw new CaptureMergeError("raw observation file contains invalid UTF-8");
+    }
     if (!text.endsWith("\n")) {
       throw new CaptureMergeError("raw observation file ends with a partial line");
     }
@@ -154,7 +157,22 @@ export async function mergeRawDirectory(
         if (rawCall.processId !== fileProcessId) {
           throw new CaptureMergeError("raw call process does not match its filename");
         }
-        rawCalls.push(envelope.call);
+        const duration = rawCall.durationNanoseconds;
+        if (
+          typeof duration !== "string"
+          || duration.length === 0
+          || duration.length > 64
+          || !/^\d+$/u.test(duration)
+        ) {
+          throw new CaptureMergeError(
+            "raw call durationNanoseconds must be a decimal integer of at most 64 digits",
+          );
+        }
+        const {
+          durationNanoseconds: _durationNanoseconds,
+          ...persistedCall
+        } = rawCall;
+        rawCalls.push(persistedCall);
       } else if (envelope.kind === "issue") {
         const rawIssue = rawObject(envelope.issue, "raw issue");
         exactKeys(rawIssue, ["code", "message"], "raw issue");
