@@ -36,6 +36,19 @@ function runAudit(outputArgument: string, replace = false) {
 }
 
 describe("quality-gate evidence output", () => {
+  it("binds pull-request CI and release evidence to the exact head commit", async () => {
+    const workflow = await readFile(
+      resolve(repository, ".github/workflows/ci.yml"),
+      "utf8",
+    );
+    expect(workflow.match(
+      /ref: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}/gu,
+    )).toHaveLength(3);
+    expect(workflow).toContain(
+      "name: prooftape-0.1.0-alpha.1-rc-${{ github.event.pull_request.head.sha || github.sha }}",
+    );
+  });
+
   it("requires a protected tokenless OIDC release workflow", async () => {
     const result = runAudit(output, true);
     expect(result.status, result.stderr).toBe(0);
