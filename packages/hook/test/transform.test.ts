@@ -141,6 +141,29 @@ describe("transformApplicationSource", () => {
     });
   });
 
+  it("rejects every unsupported dependency require usage instead of partially capturing", () => {
+    const cases = [
+      [
+        'const fixture = require("fixture");',
+        "fixture(1);",
+        'require("fixture").other(2);',
+      ].join("\n"),
+      'const { other = () => 0 } = require("fixture"); other();',
+      'const { nested: { other } } = require("fixture"); other();',
+      'const [other] = require("fixture"); other();',
+      'const other = require("fixture")[name]; other();',
+    ];
+
+    for (const source of cases) {
+      const result = transformApplicationSource(source, {
+        ...options,
+        format: "commonjs",
+      });
+      expect(result.source).toBe(source);
+      expect(result.issues[0]?.code).toMatch(/^PT_UNSUPPORTED_/);
+    }
+  });
+
   it("instruments nested dependency calls in evaluation order", () => {
     const source = [
       'import * as fixture from "fixture";',
@@ -302,6 +325,11 @@ describe("transformApplicationSource", () => {
         'const fixture = require("fixture");',
         "delete fixture?.add;",
         "fixture.add(2);",
+      ].join("\n"),
+      [
+        'var fixture = require("fixture");',
+        "if (true) { function fixture() { return 0; } }",
+        "fixture(2);",
       ].join("\n"),
     ]) {
       expect(
