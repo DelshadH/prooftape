@@ -76,13 +76,93 @@ try {
       "prooftape-reproduction-manifest",
     ],
   ];
+  const parsedGoldens = new Map();
   for (const [filename, parse, expectedKind] of goldenFormats) {
     const bytes = await readFile(join(repository, "fixtures", "schema", filename));
     const parsed = parse(bytes);
     if (parsed.kind !== expectedKind) {
       throw new Error(`packed schema rejected ${filename}`);
     }
+    parsedGoldens.set(filename, parsed);
   }
+
+  const expectPackedParserRejection = (label, parse, value) => {
+    try {
+      parse(JSON.stringify(value));
+    } catch {
+      return;
+    }
+    throw new Error(`packed schema accepted ${label}`);
+  };
+  const packedCapsule = parsedGoldens.get("capsule-v1.json");
+  const packedReport = parsedGoldens.get("report-v1.json");
+  if (!packedCapsule || !packedReport) {
+    throw new Error("packed schema golden setup failed");
+  }
+  const firstCall = packedCapsule.calls[0];
+  const firstDifference = packedReport.differences[0];
+  expectPackedParserRejection("raw duration in a persisted capsule", parseCapsule, {
+    ...packedCapsule,
+    calls: [{ ...firstCall, durationNanoseconds: "1" }],
+  });
+  expectPackedParserRejection("an invalid normalization hash", parseCapsule, {
+    ...packedCapsule,
+    calls: [{
+      ...firstCall,
+      normalization: [{
+        jsonPointer: "/value",
+        normalizer: "fixture",
+        beforeHash: "A".repeat(64),
+        after: "normalized",
+      }],
+    }],
+  });
+  expectPackedParserRejection("a non-v1 difference kind", parseReport, {
+    ...packedReport,
+    differences: [{ ...firstDifference, kind: "timing-warning" }],
+  });
+  expectPackedParserRejection("a non-blocking v1 difference", parseReport, {
+    ...packedReport,
+    verdict: "no-blocking-differences-observed",
+    blockingDifferenceCount: 0,
+    warningCount: 1,
+    differences: [{ ...firstDifference, blocking: false }],
+  });
+  expectPackedParserRejection("an invalid difference shape", parseReport, {
+    ...packedReport,
+    differences: [{ ...firstDifference, kind: "changed-sequence" }],
+  });
+  expectPackedParserRejection("a mismatched report dependency", parseReport, {
+    ...packedReport,
+    differences: [{
+      ...firstDifference,
+      base: { ...firstDifference.base, dependency: "other-package" },
+      candidate: { ...firstDifference.candidate, dependency: "other-package" },
+    }],
+  });
+  expectPackedParserRejection("inconsistent paired calls", parseReport, {
+    ...packedReport,
+    differences: [{
+      ...firstDifference,
+      candidate: { ...firstDifference.candidate, exportPath: "otherExport" },
+    }],
+  });
+  expectPackedParserRejection("inconsistent reproduction evidence", parseReport, {
+    ...packedReport,
+    reproduction: {
+      directory: "repro",
+      manifestSha256: "f".repeat(64),
+      matchKey: "not-a-difference",
+    },
+  });
+  expectPackedParserRejection("an unsafe reproduction directory", parseReport, {
+    ...packedReport,
+    reproduction: {
+      directory: "../repro",
+      manifestSha256: "f".repeat(64),
+      matchKey: firstDifference.matchKey,
+    },
+  });
   const cli = join(install, "node_modules", "prooftape", "dist", "cli.js");
   const help = run(process.execPath, [cli, "--help"], { cwd: install });
   if (!help.includes("prooftape compare")) throw new Error("packed CLI help smoke failed");

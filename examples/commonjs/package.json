@@ -1,0 +1,10 @@
+{
+  "name": "prooftape-consumer-commonjs-example",
+  "private": true,
+  "scripts": {
+    "test": "node app.cjs"
+  },
+  "dependencies": {
+    "is-number": "6.0.0"
+  }
+}

@@ -78,6 +78,10 @@ jobs:
         run: npm run check
       - name: Test packed CLI and Action consumption
         run: npm run smoke:package
+      - name: Run the public compatibility corpus and consumer examples
+        run: |
+          npm run corpus
+          npm run smoke:examples
       - name: Run dependency, source, secret, and workflow policy checks
         run: npm run security
       - name: Prepare bounded release artifacts from this commit
@@ -96,7 +100,7 @@ jobs:
           compression-level: 0
 
   publish:
-    name: Publish approved alpha with npm provenance
+    name: Publish owner-authorized alpha with npm provenance
     needs: prepare
     environment: npm-release
     permissions:

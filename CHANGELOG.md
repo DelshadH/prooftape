@@ -46,3 +46,11 @@
   alpha packages, keeps ordinary tests green across a real `camelcase` upgrade,
   and exercises the pinned reusable workflow, report, reproduction, exit code,
   and authenticity warning.
+- Added a gated public compatibility corpus and project-owned ESM, CommonJS,
+  child-process, Dependabot, and Renovate consumer examples.
+- Split required bounded raw timing from timing-free persisted v1 calls, reject
+  malformed raw UTF-8, and enforce report, normalization-hash, reproduction,
+  and matched-call invariants in both source and packed parsers.
+- Replaced human-approval release blockers with frozen-SHA independent AI
+  technical review while preserving exact checks, protected history, immutable
+  tags, least privilege, and the final owner `PUBLISH` decision.

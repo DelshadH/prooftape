@@ -8,7 +8,7 @@ import {
 import { isAbsolute, join, parse, relative, resolve } from "node:path";
 import { registerHooks } from "node:module";
 import { threadId } from "node:worker_threads";
-import type { CallObservationV1 } from "@prooftape/schema";
+import type { RawCallObservationV1 } from "@prooftape/schema";
 import { createRuntime } from "./runtime.js";
 import { transformApplicationSource, type TransformIssue } from "./transform.js";
 
@@ -33,7 +33,7 @@ interface RawCallRecord {
   readonly schemaVersion: "1";
   readonly kind: "call";
   readonly sessionId: string;
-  readonly call: CallObservationV1;
+  readonly call: RawCallObservationV1;
 }
 
 interface RawIssueRecord {
@@ -159,7 +159,7 @@ export function parseHookOptions(raw: string): HookOptions {
 }
 
 function createWriter(options: HookOptions): {
-  readonly writeCall: (call: CallObservationV1) => void;
+  readonly writeCall: (call: RawCallObservationV1) => void;
   readonly writeIssue: (issue: TransformIssue) => void;
 } {
   const outputDirectory = resolve(options.outputDirectory);

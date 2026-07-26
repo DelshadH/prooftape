@@ -37,9 +37,12 @@ export interface CallObservationV1 {
   readonly outcome: OutcomeKind;
   readonly value?: JsonValue;
   readonly error?: SerializedError;
-  readonly durationNanoseconds?: string;
   readonly normalization?: readonly NormalizationRecord[];
   readonly unsupported?: readonly UnsupportedObservation[];
+}
+
+export interface RawCallObservationV1 extends CallObservationV1 {
+  readonly durationNanoseconds: string;
 }
 
 export type DiffKind =
@@ -48,9 +51,7 @@ export type DiffKind =
   | "changed-return"
   | "changed-error"
   | "changed-mutation"
-  | "changed-sequence"
-  | "timing-warning"
-  | "ambiguous";
+  | "changed-sequence";
 
 export interface BehaviorDiffV1 {
   readonly schemaVersion: "1";
@@ -304,7 +305,6 @@ function parseCall(value: unknown, path: string): CallObservationV1 {
       "outcome",
       "value",
       "error",
-      "durationNanoseconds",
       "normalization",
       "unsupported",
     ],
@@ -350,7 +350,6 @@ function parseCall(value: unknown, path: string): CallObservationV1 {
     outcome: OutcomeKind;
     value?: JsonValue;
     error?: SerializedError;
-    durationNanoseconds?: string;
     normalization?: readonly NormalizationRecord[];
     unsupported?: readonly UnsupportedObservation[];
   } = {
@@ -371,11 +370,6 @@ function parseCall(value: unknown, path: string): CallObservationV1 {
   };
   if (hasValue) result.value = jsonValue(object.value, `${path}/value`);
   if (hasError) result.error = parseError(object.error, `${path}/error`);
-  if (Object.prototype.hasOwnProperty.call(object, "durationNanoseconds")) {
-    const duration = stringValue(object.durationNanoseconds, `${path}/durationNanoseconds`, 64);
-    if (!/^\d+$/.test(duration)) fail(`${path}/durationNanoseconds`, "expected decimal integer");
-    result.durationNanoseconds = duration;
-  }
   if (Object.prototype.hasOwnProperty.call(object, "unsupported")) {
     if (!Array.isArray(object.unsupported)) fail(`${path}/unsupported`, "expected array");
     result.unsupported = object.unsupported.map((item, index) =>
@@ -396,7 +390,7 @@ function parseCall(value: unknown, path: string): CallObservationV1 {
       return {
         jsonPointer: stringValue(normalizer.jsonPointer, `${itemPath}/jsonPointer`, 2_048),
         normalizer: stringValue(normalizer.normalizer, `${itemPath}/normalizer`, 256),
-        beforeHash: stringValue(normalizer.beforeHash, `${itemPath}/beforeHash`, 64),
+        beforeHash: hashValue(normalizer.beforeHash, `${itemPath}/beforeHash`, 64),
         after: jsonValue(normalizer.after, `${itemPath}/after`),
       };
     });
@@ -604,11 +598,9 @@ function parseDifference(value: unknown, path: string): BehaviorDiffV1 {
     "changed-error",
     "changed-mutation",
     "changed-sequence",
-    "timing-warning",
-    "ambiguous",
   ];
   if (!kinds.includes(object.kind as DiffKind)) fail(`${path}/kind`, "unknown difference kind");
-  if (typeof object.blocking !== "boolean") fail(`${path}/blocking`, "expected boolean");
+  if (object.blocking !== true) fail(`${path}/blocking`, "version 1 differences are blocking");
   const kind = object.kind as DiffKind;
   const hasBase = Object.prototype.hasOwnProperty.call(object, "base");
   const hasCandidate = Object.prototype.hasOwnProperty.call(object, "candidate");
@@ -618,7 +610,13 @@ function parseDifference(value: unknown, path: string): BehaviorDiffV1 {
   if (kind === "removed-call" && (!hasBase || hasCandidate)) {
     fail(path, "removed-call requires base only");
   }
-  if (!["added-call", "removed-call", "ambiguous"].includes(kind) && (!hasBase || !hasCandidate)) {
+  if (kind === "changed-sequence" && (hasBase || hasCandidate)) {
+    fail(path, "changed-sequence does not carry individual calls");
+  }
+  if (
+    !["added-call", "removed-call", "changed-sequence"].includes(kind)
+    && (!hasBase || !hasCandidate)
+  ) {
     fail(path, `${kind} requires base and candidate`);
   }
   const result: {
@@ -638,6 +636,18 @@ function parseDifference(value: unknown, path: string): BehaviorDiffV1 {
   };
   if (hasBase) result.base = parseCall(object.base, `${path}/base`);
   if (hasCandidate) result.candidate = parseCall(object.candidate, `${path}/candidate`);
+  if (
+    result.base
+    && result.candidate
+    && (
+      result.base.dependency !== result.candidate.dependency
+      || result.base.exportPath !== result.candidate.exportPath
+      || result.base.callSiteFingerprint !== result.candidate.callSiteFingerprint
+      || comparableJson(result.base.argsBefore) !== comparableJson(result.candidate.argsBefore)
+    )
+  ) {
+    fail(path, "paired calls do not share a match identity");
+  }
   return result;
 }
 
@@ -649,11 +659,33 @@ function parseReproduction(value: unknown, path: string): ReproductionEvidenceV1
     ["directory", "manifestSha256", "matchKey"],
     path,
   );
+  const directory = stringValue(object.directory, `${path}/directory`, 4_096);
+  if (
+    directory === "."
+    || directory === ".."
+    || directory.includes("/")
+    || directory.includes("\\")
+    || directory.includes("\0")
+  ) {
+    fail(`${path}/directory`, "expected a safe single directory name");
+  }
   return {
-    directory: stringValue(object.directory, `${path}/directory`, 4_096),
+    directory,
     manifestSha256: hashValue(object.manifestSha256, `${path}/manifestSha256`, 64),
     matchKey: stringValue(object.matchKey, `${path}/matchKey`, 4_096),
   };
+}
+
+function comparableJson(value: JsonValue): string {
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => comparableJson(item)).join(",")}]`;
+  }
+  if (value !== null && typeof value === "object") {
+    return `{${Object.keys(value).sort().map((key) =>
+      `${JSON.stringify(key)}:${comparableJson(value[key] as JsonValue)}`
+    ).join(",")}}`;
+  }
+  return JSON.stringify(value);
 }
 
 export function parseReport(input: string | Uint8Array): ReportV1 {
@@ -719,6 +751,18 @@ export function parseReport(input: string | Uint8Array): ReportV1 {
   if ((blockingDifferenceCount > 0) !== (verdict === "behavior-changed")) {
     fail("/verdict", "does not match blocking difference count");
   }
+  const dependency = stringValue(object.dependency, "/dependency", 256);
+  for (const [index, difference] of differences.entries()) {
+    for (const side of ["base", "candidate"] as const) {
+      const call = difference[side];
+      if (call && call.dependency !== dependency) {
+        fail(
+          `/differences/${index}/${side}/dependency`,
+          "does not match the report dependency",
+        );
+      }
+    }
+  }
   const result: {
     schemaVersion: "1";
     kind: "prooftape-report";
@@ -733,7 +777,7 @@ export function parseReport(input: string | Uint8Array): ReportV1 {
   } = {
     schemaVersion: "1",
     kind: "prooftape-report",
-    dependency: stringValue(object.dependency, "/dependency", 256),
+    dependency,
     verdict,
     blockingDifferenceCount,
     warningCount,
@@ -742,7 +786,19 @@ export function parseReport(input: string | Uint8Array): ReportV1 {
     differences,
   };
   if (Object.prototype.hasOwnProperty.call(object, "reproduction")) {
-    result.reproduction = parseReproduction(object.reproduction, "/reproduction");
+    const reproduction = parseReproduction(object.reproduction, "/reproduction");
+    if (!differences.some((difference) =>
+      difference.matchKey === reproduction.matchKey
+      && ["changed-return", "changed-error", "changed-mutation"].includes(difference.kind)
+      && difference.base !== undefined
+      && difference.candidate !== undefined
+    )) {
+      fail(
+        "/reproduction/matchKey",
+        "does not identify a reproducible report difference",
+      );
+    }
+    result.reproduction = reproduction;
   }
   return result;
 }

@@ -18,6 +18,7 @@ claim.
 | PT-G08 | Real package evidence | Three isolated real npm upgrade fixtures; at least one is tied to a documented historical behavioral regression or breaking change, with source and reproducible lockfiles. |
 | PT-G09 | Security and privacy | Secret canaries never appear in raw/canonical reports; candidate-execution jobs have no secrets/write token; path traversal, oversized events, cycles, and malformed capsules are rejected. |
 | PT-G10 | Semantic transparency | Instrumented and uninstrumented supported fixtures have equal outcomes, visible exports, property descriptors required by contract, and error identity fields. |
+| PT-G15 | Public corpus and consumers | A machine-readable public corpus covers changed, clean, mutation, rejection, ambiguous, unsupported, child/worker, and adversarial cases; standalone ESM, CommonJS, child-process, Dependabot, and Renovate examples install and run from committed lockfiles. |
 | PT-G11 | Performance budget | Median wall-clock overhead is ≤2.0× on the published synthetic fixture; report includes raw samples and environment. This is a budget, not a universal claim. |
 | PT-G12 | Clean-room release | Linux clean checkout runs install, full tests, killer demo, package smoke test, and generated 15–20 second terminal recording from one command. |
 
@@ -102,5 +103,6 @@ A hand-edited screenshot is not evidence.
 | PT-G07 | `packages/core/test/compare.test.ts` protects held base evidence and detects checkout changes; `record.test.ts` executes a raw-stream forgery; `packages/cli/test/adversarial-compare.test.ts` proves a genuine A-to-B behavior change can be forged into a warned exit-0 result; schema, reproduction, and CLI tests require the machine-readable authenticity marker, generated warning, and terminal warning; `.github/workflows/prooftape.yml` separates jobs and binds artifact transport to producing-job hashes without claiming observation authorship. |
 | PT-G08 | `npm run real-upgrades` builds isolated Git histories from six committed lockfiles and tests `camelcase`, `is-number`, and `ms`. |
 | PT-G09 | `npm run security` combines npm audit, license allowlist, production-install-script check, tracked-source secret scan, and workflow policy scan. |
+| PT-G15 | `npm run corpus` validates and executes `fixtures/compatibility-corpus/manifest.json`; `npm run smoke:examples` installs and runs each project-owned example from a temporary standalone checkout and validates the pinned read-only workflow templates. |
 | PT-G11 | `npm run performance` records seven raw sample pairs, environment, medians, and the enforced 2.0× budget. |
 | PT-G12 | The Node 24 quality job runs the demo, 15.5-second cast generation, real upgrades, performance, security, and package smoke from a clean checkout. |

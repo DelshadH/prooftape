@@ -35,13 +35,51 @@ node packages/cli/dist/cli.js compare \
 repository. It creates detached worktrees, runs `npm ci --ignore-scripts` in
 each, records the same direct command, and removes the worktrees afterward.
 
+## Verify a packed build
+
+Before registry publication, install the four checksum-verified tarballs
+prepared by `npm run release:prepare` into a consumer project:
+
+```bash
+npm install --ignore-scripts --no-audit --no-fund \
+  /path/to/prooftape-schema-0.1.0-alpha.1.tgz \
+  /path/to/prooftape-core-0.1.0-alpha.1.tgz \
+  /path/to/prooftape-hook-0.1.0-alpha.1.tgz \
+  /path/to/prooftape-0.1.0-alpha.1.tgz
+
+npx --no-install prooftape --help
+npx --no-install prooftape --version
+```
+
 The lower-level flow is useful when base and candidate recording must happen on
 different machines or in different GitHub jobs:
 
 ```bash
-node packages/cli/dist/cli.js record --dependency zod --command "npm test" --out baseline.ptape
-node packages/cli/dist/cli.js record --dependency zod --command "npm test" --out candidate.ptape
-node packages/cli/dist/cli.js diff --baseline baseline.ptape --candidate candidate.ptape
+npx --no-install prooftape record --dependency zod --command "npm test" --out baseline.ptape
+npx --no-install prooftape record --dependency zod --command "npm test" --out candidate.ptape
+npx --no-install prooftape diff \
+  --baseline baseline.ptape \
+  --candidate candidate.ptape \
+  --report report.json \
+  --repro-dir repro
+```
+
+Run `record` in the checkout and installed dependency version named by each
+capsule. A changed `diff` exits `2`, writes `report.json`, and, when the values
+are safe to replay, writes `repro/`. Run `node /absolute/path/to/repro/repro.mjs`
+from the installed base checkout (expected exit `0`) and candidate checkout
+(expected exit `1`).
+
+The one-command local flow from the packed install is:
+
+```bash
+npx --no-install prooftape compare \
+  --base-ref "$BASE_SHA" \
+  --candidate-ref "$HEAD_SHA" \
+  --dependency zod \
+  --command "npm test" \
+  --report report.json \
+  --repro-dir repro
 ```
 
 Commands are parsed into an argument vector and executed without a shell.
@@ -93,18 +131,25 @@ Exit codes are part of the public contract:
 ```bash
 npm run check
 npm run smoke:package
+npm run smoke:examples
 npm run demo
 npm run demo:record
 npm run real-upgrades
+npm run corpus
 npm run performance
 npm run security
 ```
 
 The demo shows green base and candidate tests, one blocking change, and the same
 counterexample in `report.json` and `repro.mjs`. The real-upgrade gate covers
-locked `camelcase`, `is-number`, and `ms` upgrades. CI runs the supported Node
-22 and 24 matrix. Repeated release-gate runs safely replace their own prior
-files inside `.evidence`; other explicit output paths remain create-only.
+locked `camelcase`, `is-number`, and `ms` upgrades. The public
+[compatibility corpus](fixtures/compatibility-corpus/README.md) covers changed,
+clean, mutation, rejection, ambiguous, unsupported, child/worker, and
+adversarial cases. Project-owned
+[consumer examples](examples/README.md) cover ESM, CommonJS, child processes,
+ordinary PRs, Dependabot, and Renovate. CI runs the supported Node 22 and 24
+matrix. Repeated release-gate runs safely replace their own prior files inside
+`.evidence`; other explicit output paths remain create-only.
 
 The JSON format is documented in [docs/formats.md](docs/formats.md), its public
 versioning promise in
@@ -118,9 +163,10 @@ The independent packed-package and reusable-workflow proof is recorded in
 Project decisions and review authority are documented in
 [GOVERNANCE.md](GOVERNANCE.md), the supported maintenance window in
 [SUPPORT.md](SUPPORT.md), and release operations in
-[RELEASING.md](RELEASING.md). The prepared alpha is not publishable yet because
-the four new npm names cannot receive a trusted-publisher configuration until
-they exist; that bootstrap blocker is kept explicit in the release procedure.
+[RELEASING.md](RELEASING.md). The four npm names are not registered and the
+connected environment has no npm authentication. This registry-only limitation
+does not weaken the technical alpha assessment or authorize publication before
+the final owner decision.
 
 ## Security
 

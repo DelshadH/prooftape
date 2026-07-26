@@ -50,10 +50,13 @@ function assertComparable(base: CapsuleV1, candidate: CapsuleV1): void {
 
 export function buildReport(base: CapsuleV1, candidate: CapsuleV1): ReportV1 {
   assertComparable(base, candidate);
-  const differences = diffCalls(base.calls, candidate.calls);
-  if (differences.some((difference) => difference.kind === "ambiguous")) {
+  const callDiffs = diffCalls(base.calls, candidate.calls);
+  if (callDiffs.some((difference) => difference.kind === "ambiguous")) {
     throw new AmbiguousComparisonError("repeated calls could not be aligned unambiguously");
   }
+  const differences = callDiffs.filter(
+    (difference) => difference.kind !== "ambiguous",
+  );
   const blockingDifferenceCount = differences.filter((difference) => difference.blocking).length;
   return {
     schemaVersion: "1",

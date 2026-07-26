@@ -65,7 +65,8 @@ and exact hashes are recorded in
 4. Require pull requests and require the reusable workflow's
    `Validate capsule integrity and compare observations` status check.
 5. Prevent rule bypass for automation accounts that open dependency upgrades.
-6. Keep workflow-file changes subject to the same review and required checks.
+6. Keep workflow-file changes subject to the same independent technical review
+   and required checks.
 
 Do not switch this to `pull_request_target`. Do not add repository, organization,
 or environment secrets. Do not add a cache shared with candidate execution.
@@ -83,23 +84,17 @@ trusted publishing for all four package names with repository
 `DelshadH/prooftape`, workflow `release.yml`, and environment `npm-release`.
 That environment must:
 
-1. require approval from a maintainer who did not author the release commit;
-2. allow only the exact reviewed release tag;
-3. prevent administrator bypass;
-4. contain no npm token or other secret.
+1. allow only the exact owner-authorized release tag;
+2. contain no npm token or other secret;
+3. grant `id-token: write` only to the publish job.
 
-These GitHub-side controls were configured and read back on 2026-07-25:
-the only permitted deployment ref is tag `v0.1.0-alpha.1`, self-review and
-administrator bypass are disabled, and the environment has zero secrets and
-zero variables. `main` also requires an up-to-date pull request, one approval,
-the three documented CI checks, stale-review dismissal, last-push approval,
-conversation resolution, and administrator enforcement; force pushes and
-deletion are disabled. A no-bypass tag ruleset prevents update or deletion of
-`v0.1.0-alpha.1` after its reviewed creation.
-
-The repository currently has one collaborator. That account cannot approve its
-own environment deployment, so a second qualified maintainer is an intentional
-release blocker rather than a reason to relax the controls.
+These GitHub-side controls were read back on 2026-07-26: the only permitted
+deployment ref is tag `v0.1.0-alpha.1`, and the environment has zero secrets,
+zero variables, and no human-review rule. `main` requires an up-to-date pull
+request, the three documented CI checks, conversation resolution, and
+administrator enforcement, with a human approval count of zero; force pushes
+and deletion are disabled. A no-bypass tag ruleset prevents update or deletion
+of `v0.1.0-alpha.1` after its owner-authorized creation.
 
 The manual release workflow binds both the run and checkout to the exact
 `v0.1.0-alpha.1` tag. Its read-only preparation job rebuilds and uploads all
@@ -113,7 +108,8 @@ dependency order with provenance. See
 replacement.
 
 The policy workflow is prepared but cannot yet authenticate a first publish:
-all four npm package names were absent on 2026-07-25, and npm requires a package
+all four npm package names were absent on 2026-07-26, and npm requires a package
 to exist before adding its trusted publisher. This conflict must be resolved by
-explicit review before a tag or dispatch; it must not be bypassed with a hidden
-token. The exact blocker is maintained in [RELEASING.md](../RELEASING.md).
+available registry authentication; it must not be bypassed with a hidden token.
+It does not block technical review or an owner-authorized GitHub release. The
+exact limitation is maintained in [RELEASING.md](../RELEASING.md).

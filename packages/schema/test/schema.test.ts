@@ -77,6 +77,17 @@ describe("parseCapsule", () => {
     expect(parseCapsule(JSON.stringify(capsule))).toEqual(capsule);
   });
 
+  it("rejects raw duration from a persisted v1 capsule", () => {
+    const withRawDuration = {
+      ...capsule,
+      calls: [{ ...capsule.calls[0], durationNanoseconds: "123" }],
+    };
+
+    expect(() => parseCapsule(JSON.stringify(withRawDuration))).toThrow(
+      /unknown field.*durationNanoseconds/,
+    );
+  });
+
   it("rejects malformed UTF-8 bytes", () => {
     expect(() => parseCapsule(invalidUtf8(capsule, "v22.22.0"))).toThrow(
       /invalid UTF-8/,
@@ -108,6 +119,25 @@ describe("parseCapsule", () => {
 
     expect(() => parseCapsule(JSON.stringify(mismatched))).toThrow(
       /calls\/0\/dependency.*metadata dependency/,
+    );
+  });
+
+  it("requires lowercase SHA-256 normalization hashes", () => {
+    const malformed = {
+      ...capsule,
+      calls: [{
+        ...capsule.calls[0],
+        normalization: [{
+          jsonPointer: "/value",
+          normalizer: "fixture",
+          beforeHash: "A".repeat(64),
+          after: "normalized",
+        }],
+      }],
+    };
+
+    expect(() => parseCapsule(JSON.stringify(malformed))).toThrow(
+      /beforeHash.*SHA-256/,
     );
   });
 
@@ -256,6 +286,71 @@ describe("parseReport", () => {
         observationAuthenticity: "established",
       },
     }))).toThrow(/observationAuthenticity/);
+  });
+
+  it("rejects difference shapes outside the strict v1 contract", () => {
+    const firstDifference = report.differences[0];
+    expect(firstDifference).toBeDefined();
+
+    expect(() => parseReport(JSON.stringify({
+      ...report,
+      differences: [{ ...firstDifference, kind: "timing-warning" }],
+    }))).toThrow(/kind/);
+
+    expect(() => parseReport(JSON.stringify({
+      ...report,
+      differences: [{ ...firstDifference, kind: "ambiguous" }],
+    }))).toThrow(/kind/);
+
+    expect(() => parseReport(JSON.stringify({
+      ...report,
+      verdict: "no-blocking-differences-observed",
+      blockingDifferenceCount: 0,
+      warningCount: 1,
+      differences: [{ ...firstDifference, blocking: false }],
+    }))).toThrow(/blocking/);
+
+    expect(() => parseReport(JSON.stringify({
+      ...report,
+      differences: [{ ...firstDifference, kind: "changed-sequence" }],
+    }))).toThrow(/changed-sequence/);
+
+    expect(() => parseReport(JSON.stringify({
+      ...report,
+      differences: [{
+        ...firstDifference,
+        base: { ...firstDifference?.base, dependency: "other-package" },
+        candidate: { ...firstDifference?.candidate, dependency: "other-package" },
+      }],
+    }))).toThrow(/dependency/);
+
+    expect(() => parseReport(JSON.stringify({
+      ...report,
+      differences: [{
+        ...firstDifference,
+        candidate: { ...firstDifference?.candidate, exportPath: "otherExport" },
+      }],
+    }))).toThrow(/paired calls/);
+  });
+
+  it("binds reproduction metadata to one safe report difference", () => {
+    expect(() => parseReport(JSON.stringify({
+      ...report,
+      reproduction: {
+        directory: "repro",
+        manifestSha256: "f".repeat(64),
+        matchKey: "not-a-difference",
+      },
+    }))).toThrow(/matchKey/);
+
+    expect(() => parseReport(JSON.stringify({
+      ...report,
+      reproduction: {
+        directory: "../repro",
+        manifestSha256: "f".repeat(64),
+        matchKey: report.differences[0]?.matchKey,
+      },
+    }))).toThrow(/directory/);
   });
 });
 

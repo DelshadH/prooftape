@@ -1,6 +1,6 @@
 import type {
-  CallObservationV1,
   JsonValue,
+  RawCallObservationV1,
   SerializedError,
   UnsupportedObservation,
 } from "@prooftape/schema";
@@ -13,7 +13,7 @@ import { pathToFileURL } from "node:url";
 
 export interface RuntimeOptions extends SerializeOptions {
   readonly processId: string;
-  readonly emit: (call: CallObservationV1) => void;
+  readonly emit: (call: RawCallObservationV1) => void;
   readonly callSiteFingerprint?: () => string;
   readonly onInternalError?: (error: unknown) => void;
 }
@@ -128,7 +128,7 @@ export function createRuntime(options: RuntimeOptions): ProofTapeRuntime {
     ...(options.redactLiterals === undefined ? {} : { redactLiterals: options.redactLiterals }),
   };
 
-  const emit = (call: CallObservationV1): void => {
+  const emit = (call: RawCallObservationV1): void => {
     try {
       options.emit(call);
     } catch (error) {
@@ -154,7 +154,7 @@ export function createRuntime(options: RuntimeOptions): ProofTapeRuntime {
       const argsBefore = safeSerialize(args, serializationOptions);
 
       const finish = (
-        outcome: CallObservationV1["outcome"],
+        outcome: RawCallObservationV1["outcome"],
         result: { readonly value?: unknown; readonly thrown?: unknown },
       ): void => {
         const argsAfter = safeSerialize(args, serializationOptions);

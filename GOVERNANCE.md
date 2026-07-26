@@ -7,11 +7,13 @@ opens an issue or pull request.
 ## Change authority
 
 - Maintainers merge only pull requests that pass all required checks.
-- At least one approving maintainer is required. The author may not be the sole
-  approver for changes to releases, workflows, permissions, schemas, exit
-  codes, the security boundary, dependency policy, or repository rules.
-- Stale approvals are dismissed after the reviewed commit changes.
-- Automation has no bypass from pull-request, review, or required-check rules.
+- Human approval is not a technical alpha-release prerequisite.
+- Release-affecting work freezes an exact SHA and receives fresh-context
+  independent AI review for security, correctness, evidence, packaging,
+  release, documentation, and usability. The result is recorded as
+  `independent-ai-technical-review`, never as human approval or an external
+  professional audit.
+- Automation has no bypass from pull-request or required-check rules.
 - A failing or missing check is not waived by changing the test, fixture, or
   documented contract unless that contract change is itself explicit and
   reviewed.
@@ -23,34 +25,26 @@ discussion starts in a private GitHub Security Advisory, not a public issue.
 ## Release authority
 
 Releases use the protected `npm-release` GitHub environment and the process in
-[RELEASING.md](RELEASING.md). One approving maintainer who did not author the
-release commit must review release-affecting changes and approve the environment
-deployment. A tag is created only after that review. No maintainer or automation
-account bypasses these controls.
+[RELEASING.md](RELEASING.md). The owner makes one final binary decision,
+`PUBLISH` or `DO NOT PUBLISH`, after all technical gates and independent AI
+review pass. A tag or GitHub release is created only after `PUBLISH`.
 
-The following GitHub settings were read back after configuration on
-2026-07-25:
+The following GitHub settings were read back on 2026-07-26:
 
-- `main` requires a pull request, one approval, and dismissal of stale reviews;
+- `main` requires a pull request and no human approval count;
 - required checks are `checks (22)`, `checks (24)`, and `quality-gates`;
 - required checks must be current with `main`;
-- the last pusher cannot supply the required approval;
 - administrators are subject to the `main` rules, and force pushes and branch
   deletion are disabled;
-- `npm-release` prevents self-review and administrator bypass, contains no
-  secret or variable, and permits only tag `v0.1.0-alpha.1`;
+- conversations must be resolved before merge;
+- `npm-release` contains no secret or variable and permits only tag
+  `v0.1.0-alpha.1`;
 - an active tag ruleset with no bypass prevents update or deletion of
-  `v0.1.0-alpha.1` after creation while still allowing its reviewed creation;
+  `v0.1.0-alpha.1` after creation.
 
-The repository currently has only one collaborator. Because that collaborator
-is also the configured environment reviewer and self-review is prevented,
-`npm-release` cannot deploy until a second qualified maintainer is added and
-configured as the independent reviewer. The following external prerequisites
-also remain incomplete:
-
-- each npm trusted publisher is restricted to
-  `.github/workflows/release.yml` and `npm-release`;
-- `v0.1.0-alpha.1` is created only after release approval.
+The npm trusted publishers cannot be configured before the four new package
+names exist. That registry-authentication limitation is tracked without
+reintroducing a human-review requirement.
 
 ## Maintainer changes
 
