@@ -423,6 +423,7 @@ export function transformApplicationSource(
 
   const bindings = new Map<string, Binding>();
   const bindingDeclarators = new Set<number>();
+  const handledRequireCalls = new Set<number>();
   const issues: TransformIssue[] = [];
   const runtimeBinding = runtimeBindingName(root);
 
@@ -484,6 +485,8 @@ export function transformApplicationSource(
     if (current.type !== "VariableDeclarator") return;
     const directRequire = isRequireCall(current.init, options.dependency);
     if (directRequire) {
+      const requireNode = node(current.init);
+      if (requireNode) handledRequireCalls.add(requireNode.start);
       if (!isTopLevelVariableDeclarator(ancestors)) {
         issues.push(issue(
           "PT_UNSUPPORTED_SCOPED_REQUIRE",
@@ -524,8 +527,18 @@ export function transformApplicationSource(
               moduleKind: "commonjs",
               moduleSpecifier: directRequire.specifier,
             });
+          } else {
+            issues.push(issue(
+              "PT_UNSUPPORTED_REQUIRE_PATTERN",
+              "dependency destructuring requires static properties and identifier bindings",
+            ));
           }
         }
+      } else {
+        issues.push(issue(
+          "PT_UNSUPPORTED_REQUIRE_PATTERN",
+          "dependency require bindings must use an identifier or flat object destructuring",
+        ));
       }
       return;
     }
@@ -535,11 +548,20 @@ export function transformApplicationSource(
       const required = isRequireCall(initializer.object, options.dependency);
       const local = nameOf(current.id);
       const member = staticMemberName(initializer);
-      if (required && local && member) {
+      if (required) {
+        const requireNode = node(initializer.object);
+        if (requireNode) handledRequireCalls.add(requireNode.start);
         if (!isTopLevelVariableDeclarator(ancestors)) {
           issues.push(issue(
             "PT_UNSUPPORTED_SCOPED_REQUIRE",
             "dependency require bindings must be declared at module scope",
+          ));
+          return;
+        }
+        if (!local || !member) {
+          issues.push(issue(
+            "PT_UNSUPPORTED_REQUIRE_MEMBER",
+            "dependency require members must be static and bind to an identifier",
           ));
           return;
         }
@@ -554,9 +576,34 @@ export function transformApplicationSource(
     }
   });
 
+  walk(root, (current) => {
+    if (
+      isRequireCall(current, options.dependency)
+      && !handledRequireCalls.has(current.start)
+    ) {
+      issues.push(issue(
+        "PT_UNSUPPORTED_REQUIRE_USAGE",
+        "dependency require calls must initialize a supported module-scope binding",
+      ));
+    }
+  });
+
   const replacements: Replacement[] = [];
 
   walkWithAncestors(root, [], (current, ancestors) => {
+    if (
+      options.format === "commonjs"
+      && current.type === "FunctionDeclaration"
+      && ancestors.at(-1)?.type !== "Program"
+    ) {
+      const declaredName = nameOf(current.id);
+      if (declaredName && bindings.has(declaredName)) {
+        issues.push(issue(
+          "PT_UNSUPPORTED_REASSIGNMENT",
+          "reassigned dependency bindings cannot be attributed transparently",
+        ));
+      }
+    }
     if (
       current.type === "VariableDeclarator"
       && node(current.init) !== undefined
