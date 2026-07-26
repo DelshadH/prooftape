@@ -15,6 +15,7 @@ interface Binding {
   readonly kind: "direct" | "namespace" | "commonjs";
   readonly path: string;
   readonly moduleKind: "esm" | "commonjs";
+  readonly moduleSpecifier: string;
 }
 
 export interface TransformIssue {
@@ -39,8 +40,6 @@ interface Replacement {
   readonly end: number;
   readonly make: (render: (start: number, end: number) => string) => string;
 }
-
-const RUNTIME = 'globalThis[Symbol.for("prooftape.runtime.v1")]';
 
 function node(value: unknown): AstNode | undefined {
   if (
@@ -110,10 +109,6 @@ function isDependencySpecifier(specifier: string | undefined, dependency: string
   return specifier === dependency || specifier?.startsWith(`${dependency}/`) === true;
 }
 
-function subpathPrefix(specifier: string, dependency: string): string {
-  return specifier === dependency ? "" : specifier.slice(dependency.length + 1);
-}
-
 function joinPath(prefix: string, member: string): string {
   return prefix.length === 0 ? member : `${prefix}.${member}`;
 }
@@ -122,14 +117,55 @@ function issue(code: string, message: string): TransformIssue {
   return { code, message };
 }
 
-function isRequireCall(value: unknown, dependency: string): { call: AstNode; prefix: string } | undefined {
+function isRequireCall(
+  value: unknown,
+  dependency: string,
+): { specifier: string } | undefined {
   const call = node(value);
   if (call?.type !== "CallExpression" || nameOf(call.callee) !== "require") return undefined;
   const argumentsValue = Array.isArray(call.arguments) ? call.arguments : [];
   if (argumentsValue.length !== 1) return undefined;
   const specifier = literalString(argumentsValue[0]);
   if (!isDependencySpecifier(specifier, dependency) || specifier === undefined) return undefined;
-  return { call, prefix: subpathPrefix(specifier, dependency) };
+  return { specifier };
+}
+
+function isTopLevelVariableDeclarator(ancestors: readonly AstNode[]): boolean {
+  return (
+    ancestors.at(-1)?.type === "VariableDeclaration"
+    && ancestors.at(-2)?.type === "Program"
+  );
+}
+
+function runtimeBindingName(root: AstNode): string {
+  const names = new Set<string>();
+  walk(root, (current) => {
+    if (current.type === "Identifier" && typeof current.name === "string") {
+      names.add(current.name);
+    }
+  });
+  let suffix = 0;
+  while (names.has(`__prooftapeRuntime${suffix === 0 ? "" : suffix}`)) {
+    suffix += 1;
+  }
+  return `__prooftapeRuntime${suffix === 0 ? "" : suffix}`;
+}
+
+function runtimeInjectionOffset(root: AstNode, source: string): number {
+  let offset = source.startsWith("#!")
+    ? Math.max(0, source.indexOf("\n") + 1)
+    : 0;
+  for (const statementValue of Array.isArray(root.body) ? root.body : []) {
+    const statement = node(statementValue);
+    if (
+      statement?.type !== "ExpressionStatement"
+      || typeof statement.directive !== "string"
+    ) {
+      break;
+    }
+    offset = statement.end;
+  }
+  return offset;
 }
 
 function rootIdentifier(value: unknown): string | undefined {
@@ -294,12 +330,12 @@ export function transformApplicationSource(
 
   const bindings = new Map<string, Binding>();
   const issues: TransformIssue[] = [];
+  const runtimeBinding = runtimeBindingName(root);
 
-  walk(root, (current) => {
+  walkWithAncestors(root, [], (current, ancestors) => {
     if (current.type === "ImportDeclaration") {
       const specifier = literalString(current.source);
       if (!isDependencySpecifier(specifier, options.dependency) || specifier === undefined) return;
-      const prefix = subpathPrefix(specifier, options.dependency);
       const specifiers = Array.isArray(current.specifiers) ? current.specifiers : [];
       for (const rawSpecifier of specifiers) {
         const importSpecifier = node(rawSpecifier);
@@ -308,18 +344,25 @@ export function transformApplicationSource(
         if (importSpecifier.type === "ImportDefaultSpecifier") {
           bindings.set(local, {
             kind: "direct",
-            path: joinPath(prefix, "default"),
+            path: "default",
             moduleKind: "esm",
+            moduleSpecifier: specifier,
           });
         } else if (importSpecifier.type === "ImportNamespaceSpecifier") {
-          bindings.set(local, { kind: "namespace", path: prefix, moduleKind: "esm" });
+          bindings.set(local, {
+            kind: "namespace",
+            path: "",
+            moduleKind: "esm",
+            moduleSpecifier: specifier,
+          });
         } else if (importSpecifier.type === "ImportSpecifier") {
           const imported = nameOf(importSpecifier.imported) ?? literalString(importSpecifier.imported);
           if (imported) {
             bindings.set(local, {
               kind: "direct",
-              path: joinPath(prefix, imported),
+              path: imported,
               moduleKind: "esm",
+              moduleSpecifier: specifier,
             });
           }
         }
@@ -347,12 +390,20 @@ export function transformApplicationSource(
     if (current.type !== "VariableDeclarator") return;
     const directRequire = isRequireCall(current.init, options.dependency);
     if (directRequire) {
+      if (!isTopLevelVariableDeclarator(ancestors)) {
+        issues.push(issue(
+          "PT_UNSUPPORTED_SCOPED_REQUIRE",
+          "dependency require bindings must be declared at module scope",
+        ));
+        return;
+      }
       const identifier = nameOf(current.id);
       if (identifier) {
         bindings.set(identifier, {
           kind: "commonjs",
-          path: directRequire.prefix,
+          path: "",
           moduleKind: "commonjs",
+          moduleSpecifier: directRequire.specifier,
         });
         return;
       }
@@ -373,8 +424,9 @@ export function transformApplicationSource(
           if (imported && local) {
             bindings.set(local, {
               kind: "direct",
-              path: joinPath(directRequire.prefix, imported),
+              path: imported,
               moduleKind: "commonjs",
+              moduleSpecifier: directRequire.specifier,
             });
           }
         }
@@ -388,10 +440,18 @@ export function transformApplicationSource(
       const local = nameOf(current.id);
       const member = staticMemberName(initializer);
       if (required && local && member) {
+        if (!isTopLevelVariableDeclarator(ancestors)) {
+          issues.push(issue(
+            "PT_UNSUPPORTED_SCOPED_REQUIRE",
+            "dependency require bindings must be declared at module scope",
+          ));
+          return;
+        }
         bindings.set(local, {
           kind: "direct",
-          path: joinPath(required.prefix, member),
+          path: member,
           moduleKind: "commonjs",
+          moduleSpecifier: required.specifier,
         });
       }
     }
@@ -478,7 +538,7 @@ export function transformApplicationSource(
         start: current.start,
         end: current.end,
         make: (render) =>
-          `${RUNTIME}.invoke(${JSON.stringify(options.dependency)},${JSON.stringify(exportPath)},${rootName},void 0,[${renderArguments(render)}],${JSON.stringify(callSite)},${JSON.stringify(binding.moduleKind)},"none")`,
+          `${runtimeBinding}.invoke(${JSON.stringify(options.dependency)},${JSON.stringify(exportPath)},${rootName},void 0,[${renderArguments(render)}],${JSON.stringify(callSite)},${JSON.stringify(binding.moduleKind)},"none",${JSON.stringify(binding.moduleSpecifier)},${JSON.stringify(binding.kind === "commonjs" ? "module" : "export")})`,
       });
       return;
     }
@@ -515,7 +575,7 @@ export function transformApplicationSource(
       start: current.start,
       end: current.end,
       make: (render) =>
-        `${RUNTIME}.invoke(${JSON.stringify(options.dependency)},${JSON.stringify(exportPath)},${render(callee.start, callee.end)},${rootName},[${renderArguments(render)}],${JSON.stringify(callSite)},${JSON.stringify(binding.moduleKind)},"parent")`,
+        `${runtimeBinding}.invoke(${JSON.stringify(options.dependency)},${JSON.stringify(exportPath)},${render(callee.start, callee.end)},${rootName},[${renderArguments(render)}],${JSON.stringify(callSite)},${JSON.stringify(binding.moduleKind)},"parent",${JSON.stringify(binding.moduleSpecifier)},"export")`,
     });
   });
 
@@ -548,5 +608,16 @@ export function transformApplicationSource(
     return result + source.slice(position, end);
   };
 
-  return { source: render(0, source.length), transformed: true, issues: [] };
+  const transformedSource = render(0, source.length);
+  const offset = runtimeInjectionOffset(root, source);
+  const declaration = `const ${runtimeBinding} = ((()=>{}).constructor("return this")())[`
+    + `((()=>{}).constructor("return this")())["Symbol"].for("prooftape.runtime.v1")];`;
+  const separator = offset === 0 || transformedSource[offset - 1] === "\n" ? "" : "\n";
+  return {
+    source:
+      `${transformedSource.slice(0, offset)}${separator}${declaration}\n`
+      + transformedSource.slice(offset),
+    transformed: true,
+    issues: [],
+  };
 }

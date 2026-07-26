@@ -18,9 +18,9 @@ describe("transformApplicationSource", () => {
     const result = transformApplicationSource(source, { ...options, format: "module" });
 
     expect(result.issues).toEqual([]);
-    expect(result.source).toContain('invoke("fixture","add",sum,void 0,[1, 2],"file:///work/app.mjs:3:22","esm","none")');
+    expect(result.source).toContain('invoke("fixture","add",sum,void 0,[1, 2],"file:///work/app.mjs:3:22","esm","none","fixture","export")');
     expect(result.source).toContain(
-      'invoke("fixture","toolbox.parse",toolbox.parse,toolbox,["x"],"file:///work/app.mjs:4:23","esm","parent")',
+      'invoke("fixture","toolbox.parse",toolbox.parse,toolbox,["x"],"file:///work/app.mjs:4:23","esm","parent","fixture","export")',
     );
     expect(result.source).toContain("const sameFunction = sum;");
   });
@@ -38,14 +38,51 @@ describe("transformApplicationSource", () => {
 
     expect(result.issues).toEqual([]);
     expect(result.source).toContain(
-      'invoke("fixture","add",fixture.add,fixture,[1, 2],"file:///work/app.mjs:3:13","commonjs","parent")',
+      'invoke("fixture","add",fixture.add,fixture,[1, 2],"file:///work/app.mjs:3:13","commonjs","parent","fixture","export")',
     );
     expect(result.source).toContain(
-      'invoke("fixture","default",fixture,void 0,[3],"file:///work/app.mjs:4:13","commonjs","none")',
+      'invoke("fixture","default",fixture,void 0,[3],"file:///work/app.mjs:4:13","commonjs","none","fixture","module")',
     );
     expect(result.source).toContain(
-      'invoke("fixture","add",picked,void 0,[4, 5],"file:///work/app.mjs:5:15","commonjs","none")',
+      'invoke("fixture","add",picked,void 0,[4, 5],"file:///work/app.mjs:5:15","commonjs","none","fixture","export")',
     );
+  });
+
+  it("uses a collision-free runtime binding when applications shadow globals", () => {
+    const source = [
+      'import { add } from "fixture";',
+      "const globalThis = {};",
+      "const Symbol = { for() { throw new Error('application binding'); } };",
+      "const __prooftapeRuntime = null;",
+      "export const total = add(1, 2);",
+    ].join("\n");
+
+    const result = transformApplicationSource(source, { ...options, format: "module" });
+
+    expect(result.issues).toEqual([]);
+    expect(result.source).not.toContain('globalThis[Symbol.for("prooftape.runtime.v1")]');
+    expect(result.source).toMatch(/const __prooftapeRuntime\d+ = /u);
+    expect(result.source).toMatch(/__prooftapeRuntime\d+\.invoke\("fixture","add"/u);
+  });
+
+  it("rejects function-scoped CommonJS bindings instead of silently partially capturing", () => {
+    const source = [
+      'const stable = require("fixture");',
+      "function local() {",
+      '  const inner = require("fixture");',
+      "  inner.changed();",
+      "}",
+      "stable.stable();",
+      "local();",
+    ].join("\n");
+
+    const result = transformApplicationSource(source, { ...options, format: "commonjs" });
+
+    expect(result.source).toBe(source);
+    expect(result.issues).toContainEqual({
+      code: "PT_UNSUPPORTED_SCOPED_REQUIRE",
+      message: "dependency require bindings must be declared at module scope",
+    });
   });
 
   it("instruments nested dependency calls in evaluation order", () => {
@@ -58,10 +95,10 @@ describe("transformApplicationSource", () => {
 
     expect(result.issues).toEqual([]);
     expect(result.source).toContain(
-      'invoke("fixture","outer",fixture.outer,fixture,[globalThis',
+      'invoke("fixture","outer",fixture.outer,fixture,[__prooftapeRuntime',
     );
     expect(result.source).toContain(
-      'invoke("fixture","inner",fixture.inner,fixture,[1],"file:///work/app.mjs:2:36","esm","parent")',
+      'invoke("fixture","inner",fixture.inner,fixture,[1],"file:///work/app.mjs:2:36","esm","parent","fixture","export")',
     );
   });
 
@@ -112,7 +149,7 @@ describe("transformApplicationSource", () => {
     expect(result.issues).toEqual([]);
     expect(result.source).toContain("function local(add) { return add(2, 3); }");
     expect(result.source).toContain(
-      'invoke("fixture","add",add,void 0,[2, 3],"file:///work/app.mjs:4:16","esm","none")',
+      'invoke("fixture","add",add,void 0,[2, 3],"file:///work/app.mjs:4:16","esm","none","fixture","export")',
     );
 
     const hoistedVar = [

@@ -35,6 +35,8 @@ function capsule(value: string, commit: string): CapsuleV1 {
       callSiteFingerprint: "test.mjs:run",
       moduleKind: "esm",
       receiverKind: "none",
+      moduleSpecifier: "fixture",
+      targetKind: "export",
       argsBefore: [2],
       argsAfter: [2],
       outcome: "return",

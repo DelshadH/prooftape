@@ -61,8 +61,10 @@ The applicable npm requirements are documented in
 
 3. Inspect `.evidence/release/package-manifest.json`, `SHA256SUMS`,
    `sbom.cdx.json`, and `smoke-results.json`. Confirm the manifest commit is the
-   reviewed commit and every tarball contains only `package.json`, `README.md`,
-   `LICENSE`, and intended `dist` files.
+   reviewed commit, its reproducibility record confirms two clean source-tree
+   builds, `SHA256SUMS` covers every retained payload except itself, and every
+   tarball contains only `package.json`, `README.md`, `LICENSE`, and intended
+   `dist` files.
 4. Present the release decision packet. If the owner says `DO NOT PUBLISH`,
    leave the verified commit intact and stop. If the owner says `PUBLISH`,
    create the immutable release tag:

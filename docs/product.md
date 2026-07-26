@@ -36,13 +36,14 @@ Supported bindings are:
 - ESM default, named, and namespace imports from the exact package or a package
   subpath;
 - CommonJS direct `require`, static destructuring, and one static required
-  member;
+  member declared at module scope;
 - a direct call to the binding or one static member call;
 - synchronous return or throw;
 - scalar, JSON-safe array, plain-object, null-prototype object, bigint, date,
   and declared special-number values.
 
-The recorder captures the export path, normalized call-site fingerprint,
+The recorder captures the exact module specifier, export path, module-versus-
+export target kind, normalized call-site fingerprint,
 per-process sequence, arguments before and after the call, and the outcome.
 Errors include name, message, optional code, and safe enumerable fields.
 
@@ -51,7 +52,8 @@ Errors include name, message, optional code, and safe enumerable fields.
 The current implementation rejects the whole affected application module when
 it sees a dependency dynamic import, re-export, constructor, tagged template,
 optional call, computed member, member deeper than one level, namespace call,
-or `call`/`apply`/`bind`. It also rejects capture values with cycles, accessors,
+function-scoped CommonJS require binding, or `call`/`apply`/`bind`. It also
+rejects capture values with cycles, accessors,
 enumerable symbol keys, custom prototypes, hostile proxy traps, excessive
 depth, excessive collection size, or excessive strings. Native Promise objects
 are returned unchanged and recorded as unsupported values: observing their

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseHookOptions } from "../src/register.js";
+import { parseHookOptions, recorderFailureExitCode } from "../src/register.js";
 
 function config(dependency: string): string {
   return JSON.stringify({
@@ -24,5 +24,12 @@ describe("parseHookOptions", () => {
     expect(parseHookOptions(config("@scope/pkg/subpath")).dependency).toBe(
       "@scope/pkg/subpath",
     );
+  });
+
+  it("promotes explicit success to a recorder failure exit", () => {
+    expect(recorderFailureExitCode(true, 0)).toBe(86);
+    expect(recorderFailureExitCode(true, undefined)).toBe(86);
+    expect(recorderFailureExitCode(true, 9)).toBe(9);
+    expect(recorderFailureExitCode(false, 0)).toBe(0);
   });
 });

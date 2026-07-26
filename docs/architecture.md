@@ -60,7 +60,9 @@ runtime.invoke(
   arguments,
   staticCallSite,
   moduleKind,
-  receiverKind
+  receiverKind,
+  moduleSpecifier,
+  targetKind
 )
 ```
 
@@ -72,7 +74,9 @@ Promise settlement is explicitly unsupported because transparent generic
 observation is not available through the public Node API. Dependency-internal
 modules and unrelated modules are not transformed.
 
-If a module contains a relevant unsupported construct, the hook leaves that
+The generated call uses a collision-free runtime binding and does not resolve
+through application bindings named `globalThis` or `Symbol`. If a module
+contains a relevant unsupported construct, the hook leaves that
 module unchanged and writes an explicit issue. Partial instrumentation of the
 same module is not presented as complete evidence.
 
@@ -81,7 +85,7 @@ same module is not presented as complete evidence.
 The deterministic base key is:
 
 ```text
-dependency + exportPath + normalizedCallSiteFingerprint
+dependency + exactModuleSpecifier + exportPath + normalizedCallSiteFingerprint
 ```
 
 Equal-count repeats align by occurrence. Unequal duplicate counts are
@@ -105,7 +109,8 @@ means the observed result matches the base evidence; exit 1 means it differs.
 ## GitHub split
 
 `.github/workflows/prooftape.yml` has independent base, candidate, and verifier
-jobs. The jobs use a fixed ProofTape commit and full-SHA third-party Actions.
+jobs. Each job checks out `github.workflow_sha`, the exact commit containing the
+invoked reusable workflow, and uses full-SHA third-party Actions.
 They have only `contents: read`, receive no secrets, use no dependency cache,
 disable npm lifecycle scripts, and never use `pull_request_target`.
 

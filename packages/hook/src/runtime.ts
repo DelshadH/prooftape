@@ -28,6 +28,8 @@ export interface ProofTapeRuntime {
     staticCallSiteFingerprint?: string,
     moduleKind?: "esm" | "commonjs",
     receiverKind?: "none" | "parent",
+    moduleSpecifier?: string,
+    targetKind?: "module" | "export",
   ): T;
 }
 
@@ -203,6 +205,8 @@ export function createRuntime(options: RuntimeOptions): ProofTapeRuntime {
       staticCallSiteFingerprint?: string,
       moduleKind?: "esm" | "commonjs",
       receiverKind?: "none" | "parent",
+      moduleSpecifier?: string,
+      targetKind?: "module" | "export",
     ): T {
       sequence += 1;
       const callSequence = sequence;
@@ -240,8 +244,13 @@ export function createRuntime(options: RuntimeOptions): ProofTapeRuntime {
           dependency: redactedString(dependency, serializationOptions),
           exportPath: redactedString(exportPath, serializationOptions),
           callSiteFingerprint: redactedString(callSiteFingerprint, serializationOptions),
-          ...(moduleKind === undefined ? {} : { moduleKind }),
-          ...(receiverKind === undefined ? {} : { receiverKind }),
+          moduleKind: moduleKind ?? "esm",
+          receiverKind: receiverKind ?? "none",
+          moduleSpecifier: redactedString(
+            moduleSpecifier ?? dependency,
+            serializationOptions,
+          ),
+          targetKind: targetKind ?? "export",
           argsBefore: argsBefore.value,
           argsAfter: argsAfter.value,
           outcome,

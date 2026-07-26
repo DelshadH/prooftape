@@ -41,6 +41,8 @@ function capsule(value: string, version: string, commit: string): CapsuleV1 {
       callSiteFingerprint: "test.mjs:run",
       moduleKind: "esm",
       receiverKind: "none",
+      moduleSpecifier: "fixture",
+      targetKind: "export",
       argsBefore: [2],
       argsAfter: [2],
       outcome: "return",
@@ -153,6 +155,8 @@ describe("generateReproduction", () => {
         value,
         moduleKind: "commonjs",
         receiverKind: "parent",
+        moduleSpecifier: "fixture",
+        targetKind: "export",
       } as unknown as CallObservationV1],
     });
     const base = withInvocation(capsule("beforex", "1.0.0", "a"), "beforex");
@@ -176,5 +180,55 @@ describe("generateReproduction", () => {
     });
     expect(baseRun.status, baseRun.stderr).toBe(0);
     expect(candidateRun.status, candidateRun.stderr).toBe(1);
+  });
+
+  it("distinguishes a CommonJS default member from the callable module", async () => {
+    const withInvocation = (
+      source: CapsuleV1,
+      value: string,
+    ): CapsuleV1 => ({
+      ...source,
+      calls: [{
+        ...source.calls[0]!,
+        exportPath: "default",
+        argsBefore: ["x"],
+        argsAfter: ["x"],
+        value,
+        moduleKind: "commonjs",
+        receiverKind: "parent",
+        moduleSpecifier: "fixture/subpath",
+        targetKind: "export",
+      }],
+    });
+    const base = withInvocation(capsule("beforex", "1.0.0", "a"), "beforex");
+    const candidate = withInvocation(capsule("afterx", "2.0.0", "e"), "afterx");
+    const report = buildReport(base, candidate);
+    const root = await mkdtemp(join(tmpdir(), "prooftape-repro-"));
+    const directory = join(root, "repro");
+    await generateReproduction(base, candidate, report, directory);
+
+    const environment = await mkdtemp(join(tmpdir(), "prooftape-repro-cjs-default-"));
+    const dependency = join(environment, "node_modules", "fixture");
+    await mkdir(dependency, { recursive: true });
+    await writeFile(join(environment, "package.json"), JSON.stringify({ type: "module" }));
+    await writeFile(
+      join(dependency, "package.json"),
+      JSON.stringify({
+        name: "fixture",
+        version: "1.0.0",
+        exports: { "./subpath": "./subpath.cjs" },
+      }),
+    );
+    await writeFile(
+      join(dependency, "subpath.cjs"),
+      'module.exports = { prefix: "before", default(input) { return this.prefix + input; } };\n',
+    );
+
+    const run = spawnSync(process.execPath, [join(directory, "repro.mjs")], {
+      cwd: environment,
+      encoding: "utf8",
+      windowsHide: true,
+    });
+    expect(run.status, run.stderr).toBe(0);
   });
 });

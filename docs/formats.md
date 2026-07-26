@@ -25,9 +25,10 @@ A capsule has:
 - an ordered `calls` array;
 - an `issues` array.
 
-Each call records dependency, export path, static call site, module kind,
-receiver kind, normalized process and sequence identifiers, arguments before
-and after, and exactly one return, throw, resolve, or reject outcome. The
+Each call records dependency, exact module specifier, export path, static call
+site, module kind, receiver kind, module-versus-export target kind, normalized
+process and sequence identifiers, arguments before and after, and exactly one
+return, throw, resolve, or reject outcome. The
 recorder emits return/throw for the supported synchronous surface; resolve and
 reject remain readable schema outcomes. Optional normalization and
 unsupported-value arrays point to every changed or rejected field.

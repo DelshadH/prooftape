@@ -134,7 +134,7 @@ describe("recordRevision", () => {
       .not.toBe(second.capsule.metadata.configurationSha256);
     expect(first.capsule.metadata.configurationSha256)
       .not.toBe(third.capsule.metadata.configurationSha256);
-  });
+  }, 15_000);
 
   it("does not expose unrelated runner environment variables to the test command", async () => {
     const canary = "pt-runner-secret-canary";

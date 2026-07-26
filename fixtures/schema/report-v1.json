@@ -35,6 +35,8 @@
         "callSiteFingerprint": "test.mjs:test",
         "moduleKind": "esm",
         "receiverKind": "none",
+        "moduleSpecifier": "fixture",
+        "targetKind": "export",
         "argsBefore": [
           "x"
         ],
@@ -54,6 +56,8 @@
         "callSiteFingerprint": "test.mjs:test",
         "moduleKind": "esm",
         "receiverKind": "none",
+        "moduleSpecifier": "fixture",
+        "targetKind": "export",
         "argsBefore": [
           "x"
         ],
