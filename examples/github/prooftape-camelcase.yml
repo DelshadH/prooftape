@@ -9,7 +9,7 @@ permissions:
 
 jobs:
   comparison:
-    uses: DelshadH/prooftape/.github/workflows/prooftape.yml@0f6a7e6ad17ca0c929ca60fb814f9f7682215dc4
+    uses: DelshadH/prooftape/.github/workflows/prooftape.yml@2a36f9dc82a281c4c6002798a978861d7aee63a2
     permissions:
       contents: read
     with:
