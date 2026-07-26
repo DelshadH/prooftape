@@ -414,6 +414,7 @@ export function transformApplicationSource(
   }
 
   const bindings = new Map<string, Binding>();
+  const bindingDeclarators = new Set<number>();
   const issues: TransformIssue[] = [];
   const runtimeBinding = runtimeBindingName(root);
 
@@ -484,6 +485,7 @@ export function transformApplicationSource(
       }
       const identifier = nameOf(current.id);
       if (identifier) {
+        bindingDeclarators.add(current.start);
         bindings.set(identifier, {
           kind: "commonjs",
           path: "",
@@ -507,6 +509,7 @@ export function transformApplicationSource(
           const imported = nameOf(property.key) ?? literalString(property.key);
           const local = nameOf(property.value);
           if (imported && local) {
+            bindingDeclarators.add(current.start);
             bindings.set(local, {
               kind: "direct",
               path: imported,
@@ -532,6 +535,7 @@ export function transformApplicationSource(
           ));
           return;
         }
+        bindingDeclarators.add(current.start);
         bindings.set(local, {
           kind: "direct",
           path: member,
@@ -545,17 +549,43 @@ export function transformApplicationSource(
   const replacements: Replacement[] = [];
 
   walkWithAncestors(root, [], (current, ancestors) => {
+    if (
+      current.type === "VariableDeclarator"
+      && node(current.init) !== undefined
+      && !bindingDeclarators.has(current.start)
+    ) {
+      for (const declaredName of assignmentRootNames(current.id)) {
+        if (bindings.has(declaredName) && !isShadowed(declaredName, ancestors)) {
+          issues.push(issue(
+            "PT_UNSUPPORTED_REASSIGNMENT",
+            "reassigned dependency bindings cannot be attributed transparently",
+          ));
+        }
+      }
+      return;
+    }
     const isAssignment = current.type === "AssignmentExpression"
       || current.type === "UpdateExpression";
+    const isDelete = current.type === "UnaryExpression" && current.operator === "delete";
+    const loopDeclaration = node(current.left);
     const isLoopAssignment = (
       current.type === "ForInStatement"
       || current.type === "ForOfStatement"
-    ) && node(current.left)?.type !== "VariableDeclaration";
-    if (!isAssignment && !isLoopAssignment) {
+    ) && (
+      loopDeclaration?.type !== "VariableDeclaration"
+      || loopDeclaration.kind === "var"
+    );
+    if (!isAssignment && !isDelete && !isLoopAssignment) {
       return;
     }
-    const assigned = node(current.left ?? current.argument);
-    const assignedNames = new Set(assignmentRootNames(assigned));
+    const assignedNames = new Set(
+      isLoopAssignment && loopDeclaration?.type === "VariableDeclaration"
+        ? (Array.isArray(loopDeclaration.declarations) ? loopDeclaration.declarations : [])
+          .flatMap((declarationValue) =>
+            assignmentRootNames(node(declarationValue)?.id),
+          )
+        : assignmentRootNames(current.left ?? current.argument),
+    );
     for (const assignedName of assignedNames) {
       if (bindings.has(assignedName) && !isShadowed(assignedName, ancestors)) {
         issues.push(issue(
