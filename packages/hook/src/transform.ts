@@ -100,9 +100,26 @@ function nameOf(identifier: unknown): string | undefined {
 
 function literalString(value: unknown): string | undefined {
   const candidate = node(value);
-  return candidate?.type === "Literal" && typeof candidate.value === "string"
-    ? candidate.value
-    : undefined;
+  if (candidate?.type === "Literal" && typeof candidate.value === "string") {
+    return candidate.value;
+  }
+  if (
+    candidate?.type === "TemplateLiteral"
+    && Array.isArray(candidate.expressions)
+    && candidate.expressions.length === 0
+    && Array.isArray(candidate.quasis)
+    && candidate.quasis.length === 1
+  ) {
+    const valueNode = node(candidate.quasis[0])?.value;
+    if (
+      valueNode !== null
+      && typeof valueNode === "object"
+      && typeof (valueNode as { cooked?: unknown }).cooked === "string"
+    ) {
+      return (valueNode as { cooked: string }).cooked;
+    }
+  }
+  return undefined;
 }
 
 function isDependencySpecifier(specifier: string | undefined, dependency: string): boolean {
@@ -121,13 +138,25 @@ function isRequireCall(
   value: unknown,
   dependency: string,
 ): { specifier: string } | undefined {
+  const matched = dependencyRequireCall(value, dependency);
+  return matched?.supported === true ? { specifier: matched.specifier } : undefined;
+}
+
+function dependencyRequireCall(
+  value: unknown,
+  dependency: string,
+): { specifier: string; supported: boolean } | undefined {
   const call = node(value);
   if (call?.type !== "CallExpression" || nameOf(call.callee) !== "require") return undefined;
   const argumentsValue = Array.isArray(call.arguments) ? call.arguments : [];
-  if (argumentsValue.length !== 1) return undefined;
   const specifier = literalString(argumentsValue[0]);
   if (!isDependencySpecifier(specifier, dependency) || specifier === undefined) return undefined;
-  return { specifier };
+  return {
+    specifier,
+    supported:
+      argumentsValue.length === 1
+      && node(argumentsValue[0])?.type === "Literal",
+  };
 }
 
 function isTopLevelVariableDeclarator(ancestors: readonly AstNode[]): boolean {
@@ -285,6 +314,7 @@ function directScopeDeclarations(scope: AstNode): readonly string[] {
     if (scope.type !== "ArrowFunctionExpression") names.push(...patternNames(scope.id));
     names.push(...functionVarNames(scope));
   }
+  if (scope.type === "Program") names.push(...functionVarNames(scope));
   if (scope.type === "CatchClause") names.push(...patternNames(scope.param));
   if (scope.type === "ClassExpression") names.push(...patternNames(scope.id));
   const body = scope.type === "Program"
@@ -426,6 +456,7 @@ export function transformApplicationSource(
   const handledRequireCalls = new Set<number>();
   const issues: TransformIssue[] = [];
   const runtimeBinding = runtimeBindingName(root);
+  const moduleDeclarations = new Set(directScopeDeclarations(root));
 
   walkWithAncestors(root, [], (current, ancestors) => {
     if (current.type === "ImportDeclaration") {
@@ -576,17 +607,24 @@ export function transformApplicationSource(
     }
   });
 
+  let hasDependencyRequire = false;
   walk(root, (current) => {
-    if (
-      isRequireCall(current, options.dependency)
-      && !handledRequireCalls.has(current.start)
-    ) {
+    const required = dependencyRequireCall(current, options.dependency);
+    if (!required) return;
+    hasDependencyRequire = true;
+    if (!required.supported || !handledRequireCalls.has(current.start)) {
       issues.push(issue(
         "PT_UNSUPPORTED_REQUIRE_USAGE",
-        "dependency require calls must initialize a supported module-scope binding",
+        "dependency require calls must use one static string argument and initialize a supported module-scope binding",
       ));
     }
   });
+  if (hasDependencyRequire && moduleDeclarations.has("require")) {
+    issues.push(issue(
+      "PT_UNSUPPORTED_REQUIRE_BINDING",
+      "the CommonJS require binding must not be declared or shadowed",
+    ));
+  }
 
   const replacements: Replacement[] = [];
 
@@ -641,6 +679,16 @@ export function transformApplicationSource(
           )
         : assignmentRootNames(current.left ?? current.argument),
     );
+    if (
+      hasDependencyRequire
+      && assignedNames.has("require")
+      && !isShadowed("require", ancestors)
+    ) {
+      issues.push(issue(
+        "PT_UNSUPPORTED_REQUIRE_BINDING",
+        "the CommonJS require binding must not be reassigned",
+      ));
+    }
     for (const assignedName of assignedNames) {
       if (bindings.has(assignedName) && !isShadowed(assignedName, ancestors)) {
         issues.push(issue(
@@ -753,7 +801,6 @@ export function transformApplicationSource(
     });
   });
 
-  const moduleDeclarations = new Set(directScopeDeclarations(root));
   const runtimeGlobal = !moduleDeclarations.has("globalThis")
     ? "globalThis"
     : !moduleDeclarations.has("global")

@@ -152,6 +152,14 @@ describe("transformApplicationSource", () => {
       'const { nested: { other } } = require("fixture"); other();',
       'const [other] = require("fixture"); other();',
       'const other = require("fixture")[name]; other();',
+      'const other = require("fixture", 1); other();',
+      "const other = require(`fixture`); other();",
+      [
+        "const custom = () => () => 0;",
+        "var require = custom;",
+        'const fixture = require("fixture");',
+        "fixture();",
+      ].join("\n"),
     ];
 
     for (const source of cases) {
