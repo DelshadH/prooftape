@@ -255,7 +255,9 @@ function directScopeDeclarations(scope: AstNode): readonly string[] {
     names.push(...functionVarNames(scope));
   }
   if (scope.type === "CatchClause") names.push(...patternNames(scope.param));
-  const body = scope.type === "Program" || scope.type === "BlockStatement"
+  const body = scope.type === "Program"
+    || scope.type === "BlockStatement"
+    || scope.type === "StaticBlock"
     ? scope.body
     : undefined;
   for (const statementValue of Array.isArray(body) ? body : []) {
@@ -269,6 +271,48 @@ function directScopeDeclarations(scope: AstNode): readonly string[] {
       }
     } else if (statement.type === "FunctionDeclaration" || statement.type === "ClassDeclaration") {
       names.push(...patternNames(statement.id));
+    } else if (statement.type === "ImportDeclaration") {
+      for (const specifierValue of Array.isArray(statement.specifiers)
+        ? statement.specifiers
+        : []) {
+        names.push(...patternNames(node(specifierValue)?.local));
+      }
+    }
+  }
+  if (
+    scope.type === "ForStatement"
+    || scope.type === "ForInStatement"
+    || scope.type === "ForOfStatement"
+  ) {
+    const declaration = node(scope.init ?? scope.left);
+    if (declaration?.type === "VariableDeclaration" && declaration.kind !== "var") {
+      for (const declarationValue of Array.isArray(declaration.declarations)
+        ? declaration.declarations
+        : []) {
+        names.push(...patternNames(node(declarationValue)?.id));
+      }
+    }
+  }
+  if (scope.type === "SwitchStatement") {
+    for (const caseValue of Array.isArray(scope.cases) ? scope.cases : []) {
+      const switchCase = node(caseValue);
+      for (const statementValue of Array.isArray(switchCase?.consequent)
+        ? switchCase.consequent
+        : []) {
+        const statement = node(statementValue);
+        if (statement?.type === "VariableDeclaration" && statement.kind !== "var") {
+          for (const declarationValue of Array.isArray(statement.declarations)
+            ? statement.declarations
+            : []) {
+            names.push(...patternNames(node(declarationValue)?.id));
+          }
+        } else if (
+          statement?.type === "FunctionDeclaration"
+          || statement?.type === "ClassDeclaration"
+        ) {
+          names.push(...patternNames(statement.id));
+        }
+      }
     }
   }
   return names;
@@ -279,7 +323,12 @@ function isShadowed(name: string, ancestors: readonly AstNode[]): boolean {
     ancestor.type !== "Program"
     && (
       ancestor.type === "BlockStatement"
+      || ancestor.type === "StaticBlock"
       || ancestor.type === "CatchClause"
+      || ancestor.type === "ForStatement"
+      || ancestor.type === "ForInStatement"
+      || ancestor.type === "ForOfStatement"
+      || ancestor.type === "SwitchStatement"
       || ancestor.type === "FunctionDeclaration"
       || ancestor.type === "FunctionExpression"
       || ancestor.type === "ArrowFunctionExpression"
@@ -460,20 +509,28 @@ export function transformApplicationSource(
   const replacements: Replacement[] = [];
 
   walkWithAncestors(root, [], (current, ancestors) => {
-    if (current.type !== "AssignmentExpression" && current.type !== "UpdateExpression") {
+    const isAssignment = current.type === "AssignmentExpression"
+      || current.type === "UpdateExpression";
+    const isLoopAssignment = (
+      current.type === "ForInStatement"
+      || current.type === "ForOfStatement"
+    ) && node(current.left)?.type !== "VariableDeclaration";
+    if (!isAssignment && !isLoopAssignment) {
       return;
     }
     const assigned = node(current.left ?? current.argument);
     const assignedRoot = rootIdentifier(assigned);
-    if (
-      assignedRoot
-      && bindings.has(assignedRoot)
-      && !isShadowed(assignedRoot, ancestors)
-    ) {
-      issues.push(issue(
-        "PT_UNSUPPORTED_REASSIGNMENT",
-        "reassigned dependency bindings cannot be attributed transparently",
-      ));
+    const assignedNames = new Set([
+      ...patternNames(assigned),
+      ...(assignedRoot === undefined ? [] : [assignedRoot]),
+    ]);
+    for (const assignedName of assignedNames) {
+      if (bindings.has(assignedName) && !isShadowed(assignedName, ancestors)) {
+        issues.push(issue(
+          "PT_UNSUPPORTED_REASSIGNMENT",
+          "reassigned dependency bindings cannot be attributed transparently",
+        ));
+      }
     }
   });
 
@@ -579,6 +636,19 @@ export function transformApplicationSource(
     });
   });
 
+  const moduleDeclarations = new Set(directScopeDeclarations(root));
+  const runtimeGlobal = !moduleDeclarations.has("globalThis")
+    ? "globalThis"
+    : !moduleDeclarations.has("global")
+      ? "global"
+      : undefined;
+  if (replacements.length > 0 && runtimeGlobal === undefined) {
+    issues.push(issue(
+      "PT_UNSUPPORTED_GLOBAL_BINDING",
+      "application bindings shadow both supported Node global aliases",
+    ));
+  }
+
   if (issues.length > 0) {
     const unique = [...new Map(issues.map((item) => [item.code, item])).values()]
       .sort((left, right) => left.code.localeCompare(right.code));
@@ -610,8 +680,8 @@ export function transformApplicationSource(
 
   const transformedSource = render(0, source.length);
   const offset = runtimeInjectionOffset(root, source);
-  const declaration = `const ${runtimeBinding} = ((()=>{}).constructor("return this")())[`
-    + `((()=>{}).constructor("return this")())["Symbol"].for("prooftape.runtime.v1")];`;
+  const declaration = `const ${runtimeBinding} = ${runtimeGlobal}[`
+    + `${runtimeGlobal}["Symbol"].for("prooftape.runtime.v1")];`;
   const separator = offset === 0 || transformedSource[offset - 1] === "\n" ? "" : "\n";
   return {
     source:

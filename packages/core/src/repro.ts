@@ -13,7 +13,7 @@ import { parseReproductionManifest } from "@prooftape/schema";
 import { canonicalJson, sha256 } from "./canonical.js";
 
 const REPRO_SCRIPT = `#!/usr/bin/env node
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -85,9 +85,22 @@ function sort(value) {
 }
 
 const requireFromCheckout = createRequire(pathToFileURL(join(process.cwd(), "package.json")));
+async function importFromCheckout(specifier) {
+  const resolverDirectory = await mkdtemp(join(process.cwd(), ".prooftape-repro-"));
+  const resolverPath = join(resolverDirectory, "resolve.mjs");
+  try {
+    const resolverSource = "import * as dependency from "
+      + JSON.stringify(specifier)
+      + ";\\nexport default dependency;\\n";
+    await writeFile(resolverPath, resolverSource, { encoding: "utf8", flag: "wx", mode: 0o600 });
+    return (await import(pathToFileURL(resolverPath).href)).default;
+  } finally {
+    await rm(resolverDirectory, { recursive: true, force: true });
+  }
+}
 const dependencyModule = input.moduleKind === "commonjs"
   ? requireFromCheckout(input.moduleSpecifier)
-  : await import(pathToFileURL(requireFromCheckout.resolve(input.moduleSpecifier)).href);
+  : await importFromCheckout(input.moduleSpecifier);
 let target = dependencyModule;
 let receiver;
 if (input.targetKind === "export") {

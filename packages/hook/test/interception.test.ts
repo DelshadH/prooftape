@@ -100,7 +100,7 @@ function run(app: string, directory: string, config?: Record<string, unknown>): 
         ...process.env,
         ...(config
           ? {
-              NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ""} --import=${register}`.trim(),
+              NODE_OPTIONS: `${process.env.PROOFTAPE_TEST_NODE_OPTIONS ?? ""} --import=${register}`.trim(),
               PROOFTAPE_CONFIG: JSON.stringify(config),
             }
           : {}),
@@ -306,20 +306,26 @@ describe("Node module interception", () => {
     );
 
     const plain = run(fixture.app, fixture.directory);
-    const instrumented = run(fixture.app, fixture.directory, {
-      schemaVersion: "1",
-      dependency: "fixture",
-      outputDirectory: fixture.output,
-      sessionId: "shadowglobals1",
-      limits: {
-        maxEvents: 100,
-        maxEventBytes: 65_536,
-        maxDepth: 12,
-        maxCollectionEntries: 100,
-        maxStringBytes: 16_384,
-      },
-      redactLiterals: [],
-    });
+    process.env.PROOFTAPE_TEST_NODE_OPTIONS = "--disallow-code-generation-from-strings";
+    let instrumented: RunResult;
+    try {
+      instrumented = run(fixture.app, fixture.directory, {
+        schemaVersion: "1",
+        dependency: "fixture",
+        outputDirectory: fixture.output,
+        sessionId: "shadowglobals1",
+        limits: {
+          maxEvents: 100,
+          maxEventBytes: 65_536,
+          maxDepth: 12,
+          maxCollectionEntries: 100,
+          maxStringBytes: 16_384,
+        },
+        redactLiterals: [],
+      });
+    } finally {
+      delete process.env.PROOFTAPE_TEST_NODE_OPTIONS;
+    }
 
     expect(instrumented.status, instrumented.stderr).toBe(0);
     expect(instrumented.stdout).toBe(plain.stdout);

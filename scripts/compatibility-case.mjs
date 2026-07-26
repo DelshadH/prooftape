@@ -21,6 +21,8 @@ function observation(overrides = {}) {
     callSiteFingerprint: "<cwd>/app.mjs:1:1",
     moduleKind: "esm",
     receiverKind: "none",
+    moduleSpecifier: "fixture",
+    targetKind: "export",
     argsBefore: [{ count: 1 }],
     argsAfter: [{ count: 1 }],
     outcome: "return",

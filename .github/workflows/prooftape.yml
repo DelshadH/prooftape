@@ -52,8 +52,8 @@ jobs:
       - name: Check out pinned ProofTape
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          repository: DelshadH/prooftape
-          ref: ${{ github.workflow_sha }}
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
           path: tool
           persist-credentials: false
       - name: Set up Node
@@ -110,8 +110,8 @@ jobs:
       - name: Check out pinned ProofTape
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          repository: DelshadH/prooftape
-          ref: ${{ github.workflow_sha }}
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
           path: tool
           persist-credentials: false
       - name: Set up Node
@@ -167,8 +167,8 @@ jobs:
       - name: Check out pinned ProofTape
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          repository: DelshadH/prooftape
-          ref: ${{ github.workflow_sha }}
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
           path: tool
           persist-credentials: false
       - name: Set up Node

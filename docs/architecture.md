@@ -109,8 +109,9 @@ means the observed result matches the base evidence; exit 1 means it differs.
 ## GitHub split
 
 `.github/workflows/prooftape.yml` has independent base, candidate, and verifier
-jobs. Each job checks out `github.workflow_sha`, the exact commit containing the
-invoked reusable workflow, and uses full-SHA third-party Actions.
+jobs. Each job checks out `job.workflow_repository` at `job.workflow_sha`, the
+exact repository and commit containing the invoked reusable workflow, and uses
+full-SHA third-party Actions.
 They have only `contents: read`, receive no secrets, use no dependency cache,
 disable npm lifecycle scripts, and never use `pull_request_target`.
 
