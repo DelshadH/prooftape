@@ -8,84 +8,101 @@
       "category": "detected-semantic-changes",
       "evidenceType": "public-upstream",
       "source": "https://github.com/sindresorhus/camelcase/releases/tag/v7.0.0",
-      "verifierFile": "scripts/real-upgrade-gates.mjs",
-      "verifierText": "expectedVerdict: \"behavior-changed\"",
-      "expected": "one reproducible changed-return difference"
+      "command": ["node", "scripts/real-upgrade-gates.mjs"],
+      "selection": { "array": "fixtures", "field": "name", "equals": "camelcase" },
+      "expectedResult": {
+        "verdict": "behavior-changed",
+        "blockingDifferenceCount": 1
+      }
     },
     {
       "id": "is-number-and-ms-clean",
       "category": "clean-upgrades",
       "evidenceType": "public-upstream",
       "source": "https://github.com/jonschlinkert/is-number/compare/6.0.0...7.0.0",
-      "verifierFile": "scripts/real-upgrade-gates.mjs",
-      "verifierText": "expectedVerdict: \"no-blocking-differences-observed\"",
-      "expected": "no blocking differences in captured supported calls"
+      "command": ["node", "scripts/real-upgrade-gates.mjs"],
+      "selection": { "array": "fixtures", "field": "name", "equals": "is-number" },
+      "expectedResult": {
+        "verdict": "no-blocking-differences-observed",
+        "blockingDifferenceCount": 0
+      }
     },
     {
       "id": "synthetic-mutation",
       "category": "mutation-changes",
       "evidenceType": "synthetic",
-      "source": "packages/core/test/diff.test.ts",
-      "verifierFile": "packages/core/test/diff.test.ts",
-      "verifierText": "blocks changed argument mutation",
-      "expected": "changed-mutation"
+      "source": "scripts/compatibility-case.mjs",
+      "command": ["node", "scripts/compatibility-case.mjs", "synthetic-mutation"],
+      "expectedResult": {
+        "exitCode": 2,
+        "verdict": "behavior-changed",
+        "differenceKinds": ["changed-mutation"],
+        "authenticityWarning": true
+      }
     },
     {
-      "id": "synthetic-rejection",
+      "id": "synthetic-throw-error",
       "category": "throw-rejection-changes",
       "evidenceType": "synthetic",
-      "source": "packages/core/test/diff.test.ts",
-      "verifierFile": "packages/core/test/diff.test.ts",
-      "verifierText": "blocks changed asynchronous rejection contracts",
-      "expected": "changed-error"
+      "source": "scripts/compatibility-case.mjs",
+      "command": ["node", "scripts/compatibility-case.mjs", "synthetic-throw-error"],
+      "expectedResult": {
+        "exitCode": 2,
+        "verdict": "behavior-changed",
+        "differenceKinds": ["changed-error"],
+        "authenticityWarning": true
+      }
     },
     {
       "id": "synthetic-ambiguous-repeat",
       "category": "ambiguous-calls",
       "evidenceType": "synthetic",
-      "source": "packages/core/test/diff.test.ts",
-      "verifierFile": "packages/core/test/diff.test.ts",
-      "verifierText": "marks changed duplicate counts ambiguous",
-      "expected": "explicit harness failure"
+      "source": "scripts/compatibility-case.mjs",
+      "command": ["node", "scripts/compatibility-case.mjs", "synthetic-ambiguous-repeat"],
+      "expectedResult": {
+        "exitCode": 3,
+        "verdict": "harness-failure",
+        "differenceKinds": [],
+        "authenticityWarning": false
+      }
     },
     {
       "id": "synthetic-unsupported-syntax",
       "category": "unsupported-syntax",
       "evidenceType": "synthetic",
-      "source": "packages/hook/test/interception.test.ts",
-      "verifierFile": "packages/hook/test/interception.test.ts",
-      "verifierText": "records unsupported dynamic imports explicitly",
-      "additionalVerifiers": [
-        {
-          "file": "packages/cli/test/cli.test.ts",
-          "text": "maps ambiguous capture to exit 3 and explicit unsupported capture to exit 4"
-        }
-      ],
-      "expected": "PT_UNSUPPORTED_DYNAMIC_IMPORT and exit 4 at the CLI boundary"
+      "source": "scripts/compatibility-case.mjs",
+      "command": ["node", "scripts/compatibility-case.mjs", "synthetic-unsupported-syntax"],
+      "expectedResult": {
+        "exitCode": 4,
+        "callCount": 0,
+        "issueCodes": ["PT_UNSUPPORTED_DYNAMIC_IMPORT"],
+        "authenticityWarning": true
+      }
     },
     {
       "id": "synthetic-child-worker",
       "category": "child-worker-behavior",
       "evidenceType": "synthetic",
-      "source": "packages/hook/test/interception.test.ts",
-      "verifierFile": "packages/hook/test/interception.test.ts",
-      "verifierText": "records worker-thread calls without file collisions",
-      "additionalVerifiers": [
-        {
-          "file": "packages/hook/test/interception.test.ts",
-          "text": "records inherited child-process calls without collisions"
-        }
-      ],
-      "expected": "exact child and worker call counts without silent loss"
+      "source": "scripts/compatibility-case.mjs",
+      "command": ["node", "scripts/compatibility-case.mjs", "synthetic-child-worker"],
+      "expectedResult": {
+        "exitCode": 0,
+        "callCount": 3,
+        "issueCodes": [],
+        "authenticityWarning": true
+      }
     },
     {
       "id": "synthetic-forged-false-clean",
       "category": "adversarial-unauthenticated-observations",
       "evidenceType": "synthetic",
       "source": "packages/cli/test/adversarial-compare.test.ts",
-      "verifierFile": "packages/cli/test/adversarial-compare.test.ts",
-      "verifierText": "reports a warned false-clean result",
-      "expected": "exit 0 only with observationAuthenticity not-established warnings"
+      "command": ["node", "scripts/compatibility-case.mjs", "synthetic-forged-false-clean"],
+      "expectedResult": {
+        "exitCode": 0,
+        "verdict": "warned-false-clean",
+        "authenticityWarning": true
+      }
     }
   ]
 }

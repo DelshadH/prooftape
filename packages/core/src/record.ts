@@ -15,6 +15,7 @@ import { canonicalJson, sha256 } from "./canonical.js";
 import { mergeRawDirectory, type RawMergeResult } from "./capsule.js";
 import { canonicalCapsule } from "./capsule.js";
 import { normalizeObservation, type LiteralNormalizer } from "./normalize.js";
+import { redactLiteralString } from "./serialize.js";
 import { parseCapsule } from "@prooftape/schema";
 
 export interface RecordRevisionOptions {
@@ -130,6 +131,9 @@ async function dependencyEvidence(
   cwd: string,
   dependency: string,
 ): Promise<EvidenceMetadataV1["dependency"]> {
+  const dependencyPackage = dependency.startsWith("@")
+    ? dependency.split("/").slice(0, 2).join("/")
+    : dependency.split("/")[0]!;
   const requireFromProject = createRequire(join(cwd, "package.json"));
   let entry: string;
   try {
@@ -148,7 +152,7 @@ async function dependencyEvidence(
           name?: unknown;
           version?: unknown;
         };
-        if (manifest.name === dependency && typeof manifest.version === "string") {
+        if (manifest.name === dependencyPackage && typeof manifest.version === "string") {
           const relativeEntry = relative(root, resolve(entry)).replaceAll("\\", "/");
           if (relativeEntry.startsWith("../") || relativeEntry === "..") {
             throw new UnsupportedCaptureError("dependency entry resolves outside the checkout");
@@ -177,6 +181,18 @@ async function removeRawDirectory(directory: string): Promise<void> {
     throw new HarnessError("refusing to remove an unexpected raw observation directory");
   }
   await rm(absolute, { recursive: true, force: true });
+}
+
+function assertNoConfiguredLiteral(
+  value: unknown,
+  literals: readonly string[],
+): void {
+  const serialized = JSON.stringify(value);
+  if (literals.some((literal) => literal.length > 0 && serialized.includes(literal))) {
+    throw new UnsupportedCaptureError(
+      "configured redaction literal remained in generated evidence",
+    );
+  }
 }
 
 export async function recordRevision(
@@ -226,6 +242,17 @@ export async function recordRevision(
   if (!/^[a-f0-9]{40}$/u.test(commitSha)) throw new HarnessError("Git did not return a full commit SHA");
   const lockfile = await lockfileEvidence(cwd);
   const dependency = await dependencyEvidence(cwd, options.dependency);
+  const redactLiterals = [...options.redactLiterals].sort(
+    (left, right) => right.length - left.length || left.localeCompare(right),
+  );
+  const persistedCommand = options.command.map((argument) =>
+    redactLiteralString(argument, redactLiterals)
+  );
+  const persistedNormalizers = normalizers.map((normalizer) => ({
+    name: redactLiteralString(normalizer.name, redactLiterals),
+    literal: normalizer.literal,
+    replacement: redactLiteralString(normalizer.replacement, redactLiterals),
+  }));
   const configurationSha256 = sha256(canonicalJson({
     command: [...options.command],
     dependency: options.dependency,
@@ -238,9 +265,10 @@ export async function recordRevision(
       maxOutputBytes: options.maxOutputBytes,
       timeoutMilliseconds: options.timeoutMilliseconds,
     },
-    redactionLiteralCount: options.redactLiterals.length,
+    redactionLiteralSha256: redactLiterals.map((literal) => sha256(literal)),
     normalizers: normalizers.map((normalizer) => ({
       name: normalizer.name,
+      literalSha256: sha256(normalizer.literal),
       replacement: normalizer.replacement,
     })),
   }));
@@ -250,7 +278,7 @@ export async function recordRevision(
     nodeVersion: process.version,
     platform: process.platform,
     arch: process.arch,
-    command: [...options.command],
+    command: persistedCommand,
     dependency,
     prooftapeVersion: options.prooftapeVersion,
     configurationSha256,
@@ -302,15 +330,21 @@ export async function recordRevision(
     const afterStatus = runGit(cwd, ["status", "--porcelain", "--untracked-files=all"]);
     if (afterStatus !== "") throw new HarnessError("test command modified checkout files");
     const merged = await mergeRawDirectory(rawDirectory, sessionId, metadata);
-    if (merged.capsule.calls.length === 0) {
+    if (merged.capsule.calls.length === 0 && merged.capsule.issues.length === 0) {
       throw new UnsupportedCaptureError("test command made no supported calls to the dependency");
     }
-    if (normalizers.length === 0) return merged;
+    if (normalizers.length === 0) {
+      assertNoConfiguredLiteral(merged.capsule, redactLiterals);
+      return merged;
+    }
     const capsule = parseCapsule(JSON.stringify({
       ...merged.capsule,
-      calls: merged.capsule.calls.map((call) => normalizeObservation(call, normalizers)),
+      calls: merged.capsule.calls.map((call) =>
+        normalizeObservation(call, persistedNormalizers)
+      ),
     }));
     const canonical = canonicalCapsule(capsule);
+    assertNoConfiguredLiteral(capsule, redactLiterals);
     return {
       capsule,
       capsuleHash: sha256(canonical),

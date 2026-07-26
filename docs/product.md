@@ -39,7 +39,6 @@ Supported bindings are:
   member;
 - a direct call to the binding or one static member call;
 - synchronous return or throw;
-- a native Promise that resolves or rejects;
 - scalar, JSON-safe array, plain-object, null-prototype object, bigint, date,
   and declared special-number values.
 
@@ -54,7 +53,9 @@ it sees a dependency dynamic import, re-export, constructor, tagged template,
 optional call, computed member, member deeper than one level, namespace call,
 or `call`/`apply`/`bind`. It also rejects capture values with cycles, accessors,
 enumerable symbol keys, custom prototypes, hostile proxy traps, excessive
-depth, excessive collection size, or excessive strings.
+depth, excessive collection size, or excessive strings. Native Promise objects
+are returned unchanged and recorded as unsupported values: observing their
+settlement would attach a handler and change unhandled-rejection semantics.
 
 Unsupported syntax becomes a capture issue. Unsupported values are marked at
 their JSON pointer. Either condition prevents a clean comparison and maps to
@@ -62,8 +63,8 @@ exit 4.
 
 ## Blocking differences
 
-- return or resolution value changed;
-- return/resolution became throw/rejection or the reverse;
+- return value changed;
+- return became throw or the reverse;
 - error contract changed;
 - argument mutation changed;
 - relative sequence of matched calls changed;

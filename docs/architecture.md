@@ -52,14 +52,25 @@ application ESM or CommonJS source, finds static bindings to the named package,
 and replaces the call expression with:
 
 ```text
-runtime.invoke(dependency, exportPath, originalFunction, receiver, arguments)
+runtime.invoke(
+  dependency,
+  exportPath,
+  originalFunction,
+  receiver,
+  arguments,
+  staticCallSite,
+  moduleKind,
+  receiverKind
+)
 ```
 
 The imported or required binding is never replaced, so visible function
 identity and descriptors remain unchanged. `Reflect.apply` preserves the
 receiver. The runtime returns the original result, rethrows the same error
-object, and returns the original native Promise while observing its settlement.
-Dependency-internal modules and unrelated modules are not transformed.
+object, and returns native Promises without attaching a settlement handler.
+Promise settlement is explicitly unsupported because transparent generic
+observation is not available through the public Node API. Dependency-internal
+modules and unrelated modules are not transformed.
 
 If a module contains a relevant unsupported construct, the hook leaves that
 module unchanged and writes an explicit issue. Partial instrumentation of the

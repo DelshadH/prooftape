@@ -55,6 +55,8 @@ const capsule: CapsuleV1 = {
       dependency: "fixture",
       exportPath: "parse",
       callSiteFingerprint: "test.mjs:test",
+      moduleKind: "esm",
+      receiverKind: "none",
       argsBefore: ["x"],
       argsAfter: ["x"],
       outcome: "return",

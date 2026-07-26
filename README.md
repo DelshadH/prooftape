@@ -109,15 +109,17 @@ code.
 
 The recorder handles static ESM imports and CommonJS `require` bindings that are
 called directly or through one static member. It records synchronous returns and
-throws, native Promise resolutions and rejections, and before/after argument
-values. ESM and CJS fixtures prove that supported calls retain their result,
-`this`, function identity, and required descriptors.
+throws, plus before/after argument values. ESM and CJS fixtures prove that
+supported calls retain their result, `this`, function identity, and required
+descriptors.
 
 Dynamic imports, re-exports, constructors, tagged templates, optional calls,
 computed or deep members, `call`/`apply`/`bind`, custom prototypes, cycles,
-accessors, and other unsafe values are explicit unsupported results. They never
-quietly produce a clean verdict. See [the product contract](docs/product.md) for
-the full boundary.
+accessors, native Promise settlement observation, and other unsafe values are
+explicit unsupported results. Promise objects themselves are returned unchanged,
+so instrumentation does not suppress native unhandled-rejection reporting. These
+surfaces never quietly produce a clean verdict. See
+[the product contract](docs/product.md) for the full boundary.
 
 Exit codes are part of the public contract:
 
@@ -144,7 +146,7 @@ The demo shows green base and candidate tests, one blocking change, and the same
 counterexample in `report.json` and `repro.mjs`. The real-upgrade gate covers
 locked `camelcase`, `is-number`, and `ms` upgrades. The public
 [compatibility corpus](fixtures/compatibility-corpus/README.md) covers changed,
-clean, mutation, rejection, ambiguous, unsupported, child/worker, and
+clean, mutation, throw/error, ambiguous, unsupported, child/worker, and
 adversarial cases. Project-owned
 [consumer examples](examples/README.md) cover ESM, CommonJS, child processes,
 ordinary PRs, Dependabot, and Renovate. CI runs the supported Node 22 and 24

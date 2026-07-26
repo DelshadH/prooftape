@@ -171,7 +171,9 @@ try {
 
   const fixture = join(temporary, "fixture");
   const dependency = join(fixture, "node_modules", "fixture");
+  const scopedDependency = join(fixture, "node_modules", "@scope", "pkg");
   await mkdir(dependency, { recursive: true });
+  await mkdir(scopedDependency, { recursive: true });
   await writeFile(
     join(fixture, "package.json"),
     JSON.stringify({ name: "packed-cli-fixture", private: true, type: "module" }),
@@ -194,10 +196,36 @@ try {
     'import { value } from "fixture"; if (value(2) !== 4) process.exitCode = 9;\n',
   );
   await writeFile(
+    join(fixture, "subpath-esm.mjs"),
+    'import { value } from "fixture/subpath"; if (value(3) !== 6) process.exitCode = 9;\n',
+  );
+  await writeFile(
+    join(fixture, "subpath-cjs.cjs"),
+    'const { value } = require("@scope/pkg/subpath"); if (value(4) !== 8) process.exitCode = 9;\n',
+  );
+  await writeFile(
     join(dependency, "package.json"),
-    JSON.stringify({ name: "fixture", version: "1.0.0", type: "module", exports: "./index.js" }),
+    JSON.stringify({
+      name: "fixture",
+      version: "1.0.0",
+      type: "module",
+      exports: { ".": "./index.js", "./subpath": "./subpath.js" },
+    }),
   );
   await writeFile(join(dependency, "index.js"), "export const value = (input) => input * 2;\n");
+  await writeFile(join(dependency, "subpath.js"), "export const value = (input) => input * 2;\n");
+  await writeFile(
+    join(scopedDependency, "package.json"),
+    JSON.stringify({
+      name: "@scope/pkg",
+      version: "1.0.0",
+      exports: { "./subpath": "./subpath.cjs" },
+    }),
+  );
+  await writeFile(
+    join(scopedDependency, "subpath.cjs"),
+    "exports.value = (input) => input * 2;\n",
+  );
   run("git", ["init", "-q"], { cwd: fixture });
   run("git", ["add", "."], { cwd: fixture });
   run("git", [
@@ -229,15 +257,65 @@ try {
   ) {
     throw new Error("packed CLI record smoke produced an invalid capsule");
   }
+  const malformedRef = spawnSync(process.execPath, [
+    cli,
+    "compare",
+    "--base-ref",
+    "not-a-sha",
+    "--candidate-ref",
+    "a".repeat(40),
+    "--dependency",
+    "fixture",
+    "--command",
+    quotedNode,
+  ], {
+    cwd: fixture,
+    encoding: "utf8",
+    timeout: 30_000,
+    maxBuffer: 64 * 1024,
+    windowsHide: true,
+    shell: false,
+  });
+  if (
+    malformedRef.status !== 4
+    || !malformedRef.stderr.includes("Unsupported or invalid input")
+  ) {
+    throw new Error("packed CLI malformed-ref exit contract failed");
+  }
+  for (const [dependencyName, app, output] of [
+    ["fixture/subpath", "subpath-esm.mjs", "subpath-esm.ptape"],
+    ["@scope/pkg/subpath", "subpath-cjs.cjs", "subpath-cjs.ptape"],
+  ]) {
+    const command = `"${process.execPath.replaceAll('"', '\\"')}" ${app}`;
+    run(process.execPath, [
+      cli,
+      "record",
+      "--dependency",
+      dependencyName,
+      "--command",
+      command,
+      "--out",
+      output,
+    ], { cwd: fixture });
+    const subpathCapsule = JSON.parse(await readFile(join(fixture, output), "utf8"));
+    if (
+      subpathCapsule.calls?.length !== 1
+      || subpathCapsule.metadata?.dependency?.name !== dependencyName
+    ) {
+      throw new Error(`packed CLI subpath smoke failed for ${dependencyName}`);
+    }
+  }
   const actionOutput = join(temporary, "github-output.txt");
+  const quotedSubpathNode =
+    `"${process.execPath.replaceAll('"', '\\"')}" subpath-esm.mjs`;
   run(process.execPath, [join(repository, "scripts", "action-record.mjs")], {
     cwd: repository,
     env: {
       ...process.env,
       GITHUB_OUTPUT: actionOutput,
       GITHUB_WORKSPACE: fixture,
-      PROOFTAPE_ACTION_COMMAND: quotedNode,
-      PROOFTAPE_ACTION_DEPENDENCY: "fixture",
+      PROOFTAPE_ACTION_COMMAND: quotedSubpathNode,
+      PROOFTAPE_ACTION_DEPENDENCY: "fixture/subpath",
       PROOFTAPE_ACTION_OUTPUT: "action.ptape",
       PROOFTAPE_ACTION_TIMEOUT_MS: "10000",
       PROOFTAPE_ACTION_WORKING_DIRECTORY: ".",
@@ -248,6 +326,7 @@ try {
   if (
     actionCapsule.kind !== "prooftape-capsule"
     || actionCapsule.calls?.length !== 1
+    || actionCapsule.metadata?.dependency?.name !== "fixture/subpath"
     || actionCapsule.metadata?.observationAuthenticity !== "not-established"
     || !/capsule-sha256=[a-f0-9]{64}/u.test(outputMetadata)
     || !outputMetadata.includes("observation-authenticity=not-established\n")

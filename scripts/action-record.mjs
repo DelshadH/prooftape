@@ -28,8 +28,8 @@ const workingDirectory = await realpath(resolve(workspace, workingName));
 if (!inside(workspace, workingDirectory)) throw new Error("working-directory escapes the workspace");
 
 const dependency = requiredEnvironment("PROOFTAPE_ACTION_DEPENDENCY", 256);
-if (!/^(?:@[a-z0-9][a-z0-9._~-]*\/)?[a-z0-9][a-z0-9._~-]*$/u.test(dependency)) {
-  throw new Error("dependency must be an exact npm package name");
+if (!/^(?:@[a-z0-9][a-z0-9._~-]*\/)?[a-z0-9][a-z0-9._~-]*(?:\/[a-z0-9][a-z0-9._~-]*)*$/u.test(dependency)) {
+  throw new Error("dependency must be an exact npm package name with an optional subpath");
 }
 const command = requiredEnvironment("PROOFTAPE_ACTION_COMMAND", 16_384);
 const output = requiredEnvironment("PROOFTAPE_ACTION_OUTPUT", 1_024);

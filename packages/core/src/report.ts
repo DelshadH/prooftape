@@ -1,4 +1,4 @@
-import type { CapsuleV1, ReportV1 } from "@prooftape/schema";
+import { REPORT_LIMITS, type CapsuleV1, type ReportV1 } from "@prooftape/schema";
 import { canonicalCapsule } from "./capsule.js";
 import { sha256 } from "./canonical.js";
 import { diffCalls } from "./diff.js";
@@ -18,6 +18,9 @@ export class AmbiguousComparisonError extends Error {
 }
 
 function assertComparable(base: CapsuleV1, candidate: CapsuleV1): void {
+  if (base.calls.length === 0 || candidate.calls.length === 0) {
+    throw new UnsupportedComparisonError("empty capsules do not establish a behavioral verdict");
+  }
   if (base.metadata.dependency.name !== candidate.metadata.dependency.name) {
     throw new UnsupportedComparisonError("capsules observe different dependencies");
   }
@@ -57,6 +60,9 @@ export function buildReport(base: CapsuleV1, candidate: CapsuleV1): ReportV1 {
   const differences = callDiffs.filter(
     (difference) => difference.kind !== "ambiguous",
   );
+  if (differences.length > REPORT_LIMITS.maxDifferences) {
+    throw new UnsupportedComparisonError("report difference limit exceeded");
+  }
   const blockingDifferenceCount = differences.filter((difference) => difference.blocking).length;
   return {
     schemaVersion: "1",

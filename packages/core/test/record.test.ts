@@ -97,6 +97,45 @@ describe("recordRevision", () => {
     expect(JSON.stringify(result.capsule)).not.toContain(canary);
   });
 
+  it("redacts command metadata and fingerprints complete privacy policies", async () => {
+    const canary = "pt-secret-canary";
+    const directory = await repository([
+      'import { value } from "fixture";',
+      `value(${JSON.stringify(canary)});`,
+    ].join("\n"));
+    const common = {
+      cwd: directory,
+      dependency: "fixture",
+      command: [process.execPath, "app.mjs", canary],
+      hookUrl,
+      prooftapeVersion: "0.0.0",
+      timeoutMilliseconds: 10_000,
+      maxOutputBytes: 64 * 1024,
+    } as const;
+
+    const first = await recordRevision({
+      ...common,
+      redactLiterals: [canary],
+      normalizers: [{ name: "id", literal: "AAAA", replacement: "<id>" }],
+    });
+    const second = await recordRevision({
+      ...common,
+      redactLiterals: [canary],
+      normalizers: [{ name: "id", literal: "BBBB", replacement: "<id>" }],
+    });
+    const third = await recordRevision({
+      ...common,
+      redactLiterals: ["different-secret"],
+      normalizers: [{ name: "id", literal: "AAAA", replacement: "<id>" }],
+    });
+
+    expect(JSON.stringify(first.capsule)).not.toContain(canary);
+    expect(first.capsule.metadata.configurationSha256)
+      .not.toBe(second.capsule.metadata.configurationSha256);
+    expect(first.capsule.metadata.configurationSha256)
+      .not.toBe(third.capsule.metadata.configurationSha256);
+  });
+
   it("does not expose unrelated runner environment variables to the test command", async () => {
     const canary = "pt-runner-secret-canary";
     const directory = await repository([

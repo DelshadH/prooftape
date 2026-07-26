@@ -43,6 +43,7 @@ describe("recording runtime", () => {
     const error = Object.assign(new TypeError("bad pt-secret-canary"), {
       code: "E_BAD",
       safeField: 7,
+      "field-pt-secret-canary": 8,
     });
 
     expect(() =>
@@ -60,7 +61,68 @@ describe("recording runtime", () => {
     });
   });
 
-  it("returns the original native promise while observing resolution", async () => {
+  it("redacts structural call labels before raw persistence", () => {
+    const calls: CallObservationV1[] = [];
+    const runtime = createRuntime({
+      processId: "raw-1",
+      redactLiterals: ["pt-secret-canary"],
+      emit: (call) => calls.push(call),
+    });
+
+    runtime.invoke(
+      "fixture-pt-secret-canary",
+      "export-pt-secret-canary",
+      () => 1,
+      undefined,
+      [],
+      "site-pt-secret-canary",
+      "esm",
+      "none",
+    );
+
+    expect(JSON.stringify(calls)).not.toContain("pt-secret-canary");
+  });
+
+  it("never invokes hostile Error accessors or replaces the thrown identity", () => {
+    const { calls, runtime } = harness();
+    const original = new Error("original");
+    Object.defineProperty(original, "message", {
+      configurable: true,
+      get() {
+        throw new Error("observer-fault");
+      },
+    });
+
+    let caught: unknown;
+    try {
+      runtime.invoke("fixture", "fail", () => {
+        throw original;
+      }, undefined, []);
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBe(original);
+    expect(calls[0]?.unsupported?.map((item) => item.reason))
+      .toContain("accessor-property");
+  });
+
+  it("contains both recorder and fallback reporting failures", () => {
+    const runtime = createRuntime({
+      processId: "raw-1",
+      emit: () => {
+        throw new Error("write-failed");
+      },
+      onInternalError: () => {
+        throw new Error("fallback-failed");
+      },
+      callSiteFingerprint: () => "fixture.test:call",
+    });
+
+    expect(runtime.invoke("fixture", "value", () => 7, undefined, [])).toBe(7);
+  });
+
+  it("returns native promises unchanged and marks settlement observation unsupported", async () => {
     const { calls, runtime } = harness();
     const original = Promise.resolve({ result: 3 });
 
@@ -68,14 +130,15 @@ describe("recording runtime", () => {
 
     expect(returned).toBe(original);
     await returned;
-    await Promise.resolve();
     expect(calls[0]).toMatchObject({
-      outcome: "resolve",
-      value: { result: 3 },
+      outcome: "return",
+      value: { $prooftape: "unsupported", reason: "unsupported-prototype" },
     });
+    expect(calls[0]?.unsupported?.map((item) => item.reason))
+      .toContain("unsupported-prototype");
   });
 
-  it("returns the original rejected promise and records the same rejection", async () => {
+  it("returns rejected native promises without attaching a settlement handler", async () => {
     const { calls, runtime } = harness();
     const error = new RangeError("outside");
     const original = Promise.reject(error);
@@ -84,11 +147,25 @@ describe("recording runtime", () => {
 
     expect(returned).toBe(original);
     await expect(returned).rejects.toBe(error);
-    await Promise.resolve();
     expect(calls[0]).toMatchObject({
-      outcome: "reject",
-      error: { name: "RangeError", message: "outside" },
+      outcome: "return",
+      value: { $prooftape: "unsupported", reason: "unsupported-prototype" },
     });
+  });
+
+  it("does not suppress native unhandled-rejection reporting", async () => {
+    const { runtime } = harness();
+    let observed: Promise<unknown> | undefined;
+    const listener = (_reason: unknown, promise: Promise<unknown>) => {
+      observed = promise;
+    };
+    process.once("unhandledRejection", listener);
+    const original = Promise.reject(new Error("ignored"));
+    runtime.invoke("fixture", "ignored", () => original, undefined, []);
+    await new Promise((resolve) => setImmediate(resolve));
+    process.removeListener("unhandledRejection", listener);
+
+    expect(observed).toBe(original);
   });
 
   it("marks unsupported captured values without changing the application result", () => {

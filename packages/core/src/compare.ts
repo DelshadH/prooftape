@@ -3,7 +3,12 @@ import { mkdtemp, realpath, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import type { CapsuleV1, ReportV1 } from "@prooftape/schema";
-import { HarnessError, recordRevision, type RecordRevisionOptions } from "./record.js";
+import {
+  HarnessError,
+  recordRevision,
+  UnsupportedCaptureError,
+  type RecordRevisionOptions,
+} from "./record.js";
 import { buildReport } from "./report.js";
 import {
   generateReproduction,
@@ -94,7 +99,9 @@ export async function compareRevisions(
   options: CompareRevisionsOptions,
 ): Promise<CompareRevisionsResult> {
   if (!/^[a-f0-9]{40}$/u.test(options.baseRef) || !/^[a-f0-9]{40}$/u.test(options.candidateRef)) {
-    throw new HarnessError("base and candidate refs must be full lowercase commit SHAs");
+    throw new UnsupportedCaptureError(
+      "base and candidate refs must be full lowercase commit SHAs",
+    );
   }
   const cwd = await realpath(resolve(options.cwd));
   const gitRoot = await realpath(git(cwd, ["rev-parse", "--show-toplevel"]));

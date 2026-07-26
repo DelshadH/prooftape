@@ -1,15 +1,20 @@
 import { parse } from "acorn";
+import { pathToFileURL } from "node:url";
 
 interface AstNode {
   readonly type: string;
   readonly start: number;
   readonly end: number;
+  readonly loc?: {
+    readonly start: { readonly line: number; readonly column: number };
+  };
   readonly [key: string]: unknown;
 }
 
 interface Binding {
   readonly kind: "direct" | "namespace" | "commonjs";
   readonly path: string;
+  readonly moduleKind: "esm" | "commonjs";
 }
 
 export interface TransformIssue {
@@ -62,6 +67,27 @@ function walk(root: AstNode, visit: (current: AstNode) => void): void {
     } else {
       const childNode = node(value);
       if (childNode) walk(childNode, visit);
+    }
+  }
+}
+
+function walkWithAncestors(
+  root: AstNode,
+  ancestors: readonly AstNode[],
+  visit: (current: AstNode, ancestors: readonly AstNode[]) => void,
+): void {
+  visit(root, ancestors);
+  const nextAncestors = [...ancestors, root];
+  for (const [key, value] of Object.entries(root)) {
+    if (key === "start" || key === "end" || key === "loc") continue;
+    if (Array.isArray(value)) {
+      for (const child of value) {
+        const childNode = node(child);
+        if (childNode) walkWithAncestors(childNode, nextAncestors, visit);
+      }
+    } else {
+      const childNode = node(value);
+      if (childNode) walkWithAncestors(childNode, nextAncestors, visit);
     }
   }
 }
@@ -119,11 +145,123 @@ function staticMemberName(value: AstNode): string | undefined {
   return nameOf(value.property);
 }
 
+function patternNames(value: unknown): readonly string[] {
+  const pattern = node(value);
+  if (!pattern) return [];
+  if (pattern.type === "Identifier") return typeof pattern.name === "string" ? [pattern.name] : [];
+  if (pattern.type === "RestElement" || pattern.type === "AssignmentPattern") {
+    return patternNames(pattern.argument ?? pattern.left);
+  }
+  if (pattern.type === "ArrayPattern") {
+    return (Array.isArray(pattern.elements) ? pattern.elements : [])
+      .flatMap((element) => patternNames(element));
+  }
+  if (pattern.type === "ObjectPattern") {
+    return (Array.isArray(pattern.properties) ? pattern.properties : [])
+      .flatMap((propertyValue) => {
+        const property = node(propertyValue);
+        return property?.type === "Property"
+          ? patternNames(property.value)
+          : patternNames(property?.argument);
+      });
+  }
+  return [];
+}
+
+function functionVarNames(scope: AstNode): readonly string[] {
+  const names: string[] = [];
+  const visit = (current: AstNode): void => {
+    if (
+      current !== scope
+      && (
+        current.type === "FunctionDeclaration"
+        || current.type === "FunctionExpression"
+        || current.type === "ArrowFunctionExpression"
+      )
+    ) {
+      return;
+    }
+    if (current.type === "VariableDeclaration" && current.kind === "var") {
+      for (const declarationValue of Array.isArray(current.declarations)
+        ? current.declarations
+        : []) {
+        names.push(...patternNames(node(declarationValue)?.id));
+      }
+    }
+    for (const [key, value] of Object.entries(current)) {
+      if (key === "start" || key === "end" || key === "loc") continue;
+      if (Array.isArray(value)) {
+        for (const child of value) {
+          const childNode = node(child);
+          if (childNode) visit(childNode);
+        }
+      } else {
+        const childNode = node(value);
+        if (childNode) visit(childNode);
+      }
+    }
+  };
+  visit(scope);
+  return names;
+}
+
+function directScopeDeclarations(scope: AstNode): readonly string[] {
+  const names: string[] = [];
+  if (
+    scope.type === "FunctionDeclaration"
+    || scope.type === "FunctionExpression"
+    || scope.type === "ArrowFunctionExpression"
+  ) {
+    for (const parameter of Array.isArray(scope.params) ? scope.params : []) {
+      names.push(...patternNames(parameter));
+    }
+    if (scope.type !== "ArrowFunctionExpression") names.push(...patternNames(scope.id));
+    names.push(...functionVarNames(scope));
+  }
+  if (scope.type === "CatchClause") names.push(...patternNames(scope.param));
+  const body = scope.type === "Program" || scope.type === "BlockStatement"
+    ? scope.body
+    : undefined;
+  for (const statementValue of Array.isArray(body) ? body : []) {
+    const statement = node(statementValue);
+    if (!statement) continue;
+    if (statement.type === "VariableDeclaration") {
+      for (const declarationValue of Array.isArray(statement.declarations)
+        ? statement.declarations
+        : []) {
+        names.push(...patternNames(node(declarationValue)?.id));
+      }
+    } else if (statement.type === "FunctionDeclaration" || statement.type === "ClassDeclaration") {
+      names.push(...patternNames(statement.id));
+    }
+  }
+  return names;
+}
+
+function isShadowed(name: string, ancestors: readonly AstNode[]): boolean {
+  return ancestors.some((ancestor) =>
+    ancestor.type !== "Program"
+    && (
+      ancestor.type === "BlockStatement"
+      || ancestor.type === "CatchClause"
+      || ancestor.type === "FunctionDeclaration"
+      || ancestor.type === "FunctionExpression"
+      || ancestor.type === "ArrowFunctionExpression"
+    )
+    && directScopeDeclarations(ancestor).includes(name)
+  );
+}
+
 export function transformApplicationSource(
   source: string,
   options: TransformOptions,
 ): TransformResult {
   const normalizedUrl = options.url.replaceAll("\\", "/");
+  const normalizedCwd = process.cwd().replaceAll("\\", "/");
+  const cwdUrl = pathToFileURL(process.cwd()).href.replace(/\/$/u, "");
+  const stableUrl = normalizedUrl
+    .replace(cwdUrl, "<cwd>")
+    .replace(normalizedCwd, "<cwd>");
   if (
     normalizedUrl.includes("/node_modules/")
     || normalizedUrl.startsWith("node:")
@@ -139,6 +277,7 @@ export function transformApplicationSource(
       sourceType: options.format === "module" ? "module" : "script",
       allowHashBang: true,
       allowReturnOutsideFunction: options.format === "commonjs",
+      locations: true,
     }) as unknown as AstNode;
   } catch {
     return {
@@ -167,12 +306,22 @@ export function transformApplicationSource(
         const local = nameOf(importSpecifier?.local);
         if (!importSpecifier || !local) continue;
         if (importSpecifier.type === "ImportDefaultSpecifier") {
-          bindings.set(local, { kind: "direct", path: joinPath(prefix, "default") });
+          bindings.set(local, {
+            kind: "direct",
+            path: joinPath(prefix, "default"),
+            moduleKind: "esm",
+          });
         } else if (importSpecifier.type === "ImportNamespaceSpecifier") {
-          bindings.set(local, { kind: "namespace", path: prefix });
+          bindings.set(local, { kind: "namespace", path: prefix, moduleKind: "esm" });
         } else if (importSpecifier.type === "ImportSpecifier") {
           const imported = nameOf(importSpecifier.imported) ?? literalString(importSpecifier.imported);
-          if (imported) bindings.set(local, { kind: "direct", path: joinPath(prefix, imported) });
+          if (imported) {
+            bindings.set(local, {
+              kind: "direct",
+              path: joinPath(prefix, imported),
+              moduleKind: "esm",
+            });
+          }
         }
       }
     }
@@ -200,7 +349,11 @@ export function transformApplicationSource(
     if (directRequire) {
       const identifier = nameOf(current.id);
       if (identifier) {
-        bindings.set(identifier, { kind: "commonjs", path: directRequire.prefix });
+        bindings.set(identifier, {
+          kind: "commonjs",
+          path: directRequire.prefix,
+          moduleKind: "commonjs",
+        });
         return;
       }
       const pattern = node(current.id);
@@ -221,6 +374,7 @@ export function transformApplicationSource(
             bindings.set(local, {
               kind: "direct",
               path: joinPath(directRequire.prefix, imported),
+              moduleKind: "commonjs",
             });
           }
         }
@@ -237,6 +391,7 @@ export function transformApplicationSource(
         bindings.set(local, {
           kind: "direct",
           path: joinPath(required.prefix, member),
+          moduleKind: "commonjs",
         });
       }
     }
@@ -244,7 +399,25 @@ export function transformApplicationSource(
 
   const replacements: Replacement[] = [];
 
-  walk(root, (current) => {
+  walkWithAncestors(root, [], (current, ancestors) => {
+    if (current.type !== "AssignmentExpression" && current.type !== "UpdateExpression") {
+      return;
+    }
+    const assigned = node(current.left ?? current.argument);
+    const assignedRoot = rootIdentifier(assigned);
+    if (
+      assignedRoot
+      && bindings.has(assignedRoot)
+      && !isShadowed(assignedRoot, ancestors)
+    ) {
+      issues.push(issue(
+        "PT_UNSUPPORTED_REASSIGNMENT",
+        "reassigned dependency bindings cannot be attributed transparently",
+      ));
+    }
+  });
+
+  walkWithAncestors(root, [], (current, ancestors) => {
     if (current.type === "NewExpression" || current.type === "TaggedTemplateExpression") {
       const callee = node(current.callee ?? current.tag);
       const bindingName = rootIdentifier(callee);
@@ -264,6 +437,7 @@ export function transformApplicationSource(
     if (!callee) return;
     const rootName = rootIdentifier(callee);
     if (!rootName || !bindings.has(rootName)) return;
+    if (isShadowed(rootName, ancestors)) return;
 
     if (current.optional === true || callee.type === "ChainExpression" || callee.optional === true) {
       issues.push(issue(
@@ -284,6 +458,10 @@ export function transformApplicationSource(
         : render(argumentStart, argumentEnd);
     const binding = bindings.get(rootName);
     if (!binding) return;
+    const location = current.loc?.start;
+    const callSite = location
+      ? `${stableUrl}:${location.line}:${location.column + 1}`
+      : `${stableUrl}:offset-${current.start}`;
 
     if (callee.type === "Identifier") {
       if (binding.kind === "namespace") {
@@ -300,7 +478,7 @@ export function transformApplicationSource(
         start: current.start,
         end: current.end,
         make: (render) =>
-          `${RUNTIME}.invoke(${JSON.stringify(options.dependency)},${JSON.stringify(exportPath)},${rootName},void 0,[${renderArguments(render)}])`,
+          `${RUNTIME}.invoke(${JSON.stringify(options.dependency)},${JSON.stringify(exportPath)},${rootName},void 0,[${renderArguments(render)}],${JSON.stringify(callSite)},${JSON.stringify(binding.moduleKind)},"none")`,
       });
       return;
     }
@@ -337,7 +515,7 @@ export function transformApplicationSource(
       start: current.start,
       end: current.end,
       make: (render) =>
-        `${RUNTIME}.invoke(${JSON.stringify(options.dependency)},${JSON.stringify(exportPath)},${render(callee.start, callee.end)},${rootName},[${renderArguments(render)}])`,
+        `${RUNTIME}.invoke(${JSON.stringify(options.dependency)},${JSON.stringify(exportPath)},${render(callee.start, callee.end)},${rootName},[${renderArguments(render)}],${JSON.stringify(callSite)},${JSON.stringify(binding.moduleKind)},"parent")`,
     });
   });
 
