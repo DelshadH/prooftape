@@ -57,7 +57,7 @@ describe("quality-gate evidence output", () => {
       "0f6a7e6ad17ca0c929ca60fb814f9f7682215dc4",
     );
     const reviewedWorkflowPin =
-      "2a36f9dc82a281c4c6002798a978861d7aee63a2";
+      "a57603a585abe693d81b1a80e1f71335760eca12";
     for (const path of [
       "docs/github.md",
       "examples/github/prooftape-camelcase.yml",
