@@ -300,12 +300,7 @@ export async function recordRevision(
     },
     redactLiterals: options.redactLiterals,
   };
-  const existingNodeOptions = process.env.NODE_OPTIONS?.trim() ?? "";
-  if (Buffer.byteLength(existingNodeOptions, "utf8") > 16 * 1024) {
-    await removeRawDirectory(rawDirectory);
-    throw new UnsupportedCaptureError("existing NODE_OPTIONS exceeds 16 KiB");
-  }
-  const nodeOptions = `${existingNodeOptions}${existingNodeOptions ? " " : ""}--import=${options.hookUrl}`;
+  const nodeOptions = `--import=${options.hookUrl}`;
 
   try {
     const commandResult = spawnSync(options.command[0]!, options.command.slice(1), {

@@ -162,6 +162,34 @@ describe("recordRevision", () => {
     }
   });
 
+  it("does not inherit runner NODE_OPTIONS into isolated application commands", async () => {
+    const directory = await repository([
+      'import { value } from "fixture";',
+      'value(process.env.NODE_OPTIONS ?? "not-present");',
+    ].join("\n"));
+    const previous = process.env.NODE_OPTIONS;
+    process.env.NODE_OPTIONS = "--require=prooftape-runner-only-missing-module";
+    try {
+      const result = await recordRevision({
+        cwd: directory,
+        dependency: "fixture",
+        command: [process.execPath, "app.mjs"],
+        hookUrl,
+        prooftapeVersion: "0.0.0",
+        redactLiterals: [],
+        timeoutMilliseconds: 10_000,
+        maxOutputBytes: 64 * 1024,
+      });
+
+      expect(result.capsule.calls[0]?.argsBefore).toEqual([
+        expect.not.stringContaining("prooftape-runner-only-missing-module"),
+      ]);
+    } finally {
+      if (previous === undefined) delete process.env.NODE_OPTIONS;
+      else process.env.NODE_OPTIONS = previous;
+    }
+  });
+
   it("marks forged in-process observations as unauthenticated", async () => {
     const attackSource = await readFile(
       new URL("./fixtures/forge-raw-observation.mjs", import.meta.url),
