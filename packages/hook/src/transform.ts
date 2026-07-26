@@ -204,6 +204,32 @@ function patternNames(value: unknown): readonly string[] {
   return [];
 }
 
+function assignmentRootNames(value: unknown): readonly string[] {
+  const target = node(value);
+  if (!target) return [];
+  if (target.type === "Identifier" || target.type === "MemberExpression") {
+    const root = rootIdentifier(target);
+    return root === undefined ? [] : [root];
+  }
+  if (target.type === "RestElement" || target.type === "AssignmentPattern") {
+    return assignmentRootNames(target.argument ?? target.left);
+  }
+  if (target.type === "ArrayPattern") {
+    return (Array.isArray(target.elements) ? target.elements : [])
+      .flatMap((element) => assignmentRootNames(element));
+  }
+  if (target.type === "ObjectPattern") {
+    return (Array.isArray(target.properties) ? target.properties : [])
+      .flatMap((propertyValue) => {
+        const property = node(propertyValue);
+        return property?.type === "Property"
+          ? assignmentRootNames(property.value)
+          : assignmentRootNames(property?.argument);
+      });
+  }
+  return [];
+}
+
 function functionVarNames(scope: AstNode): readonly string[] {
   const names: string[] = [];
   const visit = (current: AstNode): void => {
@@ -255,6 +281,7 @@ function directScopeDeclarations(scope: AstNode): readonly string[] {
     names.push(...functionVarNames(scope));
   }
   if (scope.type === "CatchClause") names.push(...patternNames(scope.param));
+  if (scope.type === "ClassExpression") names.push(...patternNames(scope.id));
   const body = scope.type === "Program"
     || scope.type === "BlockStatement"
     || scope.type === "StaticBlock"
@@ -319,9 +346,17 @@ function directScopeDeclarations(scope: AstNode): readonly string[] {
 }
 
 function isShadowed(name: string, ancestors: readonly AstNode[]): boolean {
-  return ancestors.some((ancestor) =>
-    ancestor.type !== "Program"
-    && (
+  return ancestors.some((ancestor, index) => {
+    if (
+      ancestor.type === "Program"
+      || (
+        ancestor.type === "SwitchStatement"
+        && ancestors[index + 1]?.type !== "SwitchCase"
+      )
+    ) {
+      return false;
+    }
+    return (
       ancestor.type === "BlockStatement"
       || ancestor.type === "StaticBlock"
       || ancestor.type === "CatchClause"
@@ -332,9 +367,10 @@ function isShadowed(name: string, ancestors: readonly AstNode[]): boolean {
       || ancestor.type === "FunctionDeclaration"
       || ancestor.type === "FunctionExpression"
       || ancestor.type === "ArrowFunctionExpression"
+      || ancestor.type === "ClassExpression"
     )
-    && directScopeDeclarations(ancestor).includes(name)
-  );
+      && directScopeDeclarations(ancestor).includes(name);
+  });
 }
 
 export function transformApplicationSource(
@@ -519,11 +555,7 @@ export function transformApplicationSource(
       return;
     }
     const assigned = node(current.left ?? current.argument);
-    const assignedRoot = rootIdentifier(assigned);
-    const assignedNames = new Set([
-      ...patternNames(assigned),
-      ...(assignedRoot === undefined ? [] : [assignedRoot]),
-    ]);
+    const assignedNames = new Set(assignmentRootNames(assigned));
     for (const assignedName of assignedNames) {
       if (bindings.has(assignedName) && !isShadowed(assignedName, ancestors)) {
         issues.push(issue(
