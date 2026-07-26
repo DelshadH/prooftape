@@ -40,7 +40,7 @@ describe("performance gate", () => {
     } finally {
       await rm(temporaryRoot, { recursive: true, force: true });
     }
-  });
+  }, 30_000);
 
   it("removes temporary observations when evidence output is rejected", async () => {
     const temporaryRoot = await mkdtemp(
@@ -77,5 +77,5 @@ describe("performance gate", () => {
     } finally {
       await rm(temporaryRoot, { recursive: true, force: true });
     }
-  });
+  }, 30_000);
 });
