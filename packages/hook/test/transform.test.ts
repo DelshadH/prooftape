@@ -275,5 +275,30 @@ describe("transformApplicationSource", () => {
       code: "PT_UNSUPPORTED_REASSIGNMENT",
       message: "reassigned dependency bindings cannot be attributed transparently",
     });
+
+    for (const source of [
+      [
+        'var fixture = require("fixture");',
+        "var fixture = (value) => value * 3;",
+        "fixture(2);",
+      ].join("\n"),
+      [
+        'var fixture = require("fixture");',
+        "const local = (value) => value * 3;",
+        "for (var fixture of [local]) { fixture(2); }",
+      ].join("\n"),
+      [
+        'const fixture = require("fixture");',
+        "delete fixture.add;",
+        "fixture.add(2);",
+      ].join("\n"),
+    ]) {
+      expect(
+        transformApplicationSource(source, { ...options, format: "commonjs" }).issues,
+      ).toContainEqual({
+        code: "PT_UNSUPPORTED_REASSIGNMENT",
+        message: "reassigned dependency bindings cannot be attributed transparently",
+      });
+    }
   });
 });
