@@ -635,6 +635,12 @@ export function transformApplicationSource(
       && ancestors.at(-1)?.type !== "Program"
     ) {
       const declaredName = nameOf(current.id);
+      if (hasDependencyRequire && declaredName === "require") {
+        issues.push(issue(
+          "PT_UNSUPPORTED_REQUIRE_BINDING",
+          "the CommonJS require binding must not be declared or shadowed",
+        ));
+      }
       if (declaredName && bindings.has(declaredName)) {
         issues.push(issue(
           "PT_UNSUPPORTED_REASSIGNMENT",
