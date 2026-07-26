@@ -21,7 +21,7 @@ permissions:
 
 jobs:
   comparison:
-    uses: DelshadH/prooftape/.github/workflows/prooftape.yml@0f6a7e6ad17ca0c929ca60fb814f9f7682215dc4
+    uses: DelshadH/prooftape/.github/workflows/prooftape.yml@2a36f9dc82a281c4c6002798a978861d7aee63a2
     permissions:
       contents: read
     with:
@@ -50,10 +50,10 @@ capsule to discover this boundary.
 
 The independent
 [ProofTape consumer example](https://github.com/DelshadH/prooftape-consumer-example)
-uses this exact pin. Its first
+recorded the earlier reviewed workflow used for its first
 [dependency-upgrade run](https://github.com/DelshadH/prooftape-consumer-example/actions/runs/30160157416)
-proves the complete caller path outside this monorepo. The reproducible evidence
-and exact hashes are recorded in
+as historical end-to-end evidence. New callers must use the remediated exact
+pin shown above. The reproducible historical evidence and exact hashes are recorded in
 [external-consumer.md](external-consumer.md).
 
 ## Make it required
