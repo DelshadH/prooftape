@@ -10,6 +10,12 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
+function subprocessEnvironment(): NodeJS.ProcessEnv {
+  const environment = { ...process.env };
+  delete environment.NODE_OPTIONS;
+  return environment;
+}
+
 function run(
   cwd: string,
   executable: string,
@@ -22,6 +28,7 @@ function run(
     maxBuffer: 2 * 1024 * 1024,
     windowsHide: true,
     shell: false,
+    env: subprocessEnvironment(),
   });
   expect(result.status, result.stderr).toBe(0);
   return result.stdout.trim();
@@ -190,6 +197,7 @@ describe("adversarial candidate boundary", () => {
         maxBuffer: 2 * 1024 * 1024,
         windowsHide: true,
         shell: false,
+        env: subprocessEnvironment(),
       });
 
       expect(comparison.status, comparison.stderr).toBe(0);
