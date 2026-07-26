@@ -72,6 +72,7 @@ describe("release-pack", () => {
         await readFile(join(output, "smoke-results.json"), "utf8"),
       );
       const sbomText = await readFile(join(output, "sbom.cdx.json"), "utf8");
+      const checksums = await readFile(join(output, "SHA256SUMS"), "utf8");
       const sbom = JSON.parse(sbomText);
       expect({
         version: packageManifest.version,
@@ -111,8 +112,17 @@ describe("release-pack", () => {
       )).toBe(false);
       expect(sbomText).not.toMatch(/file:[A-Za-z]:[\\/]|file:\/(?:tmp|private\/tmp)\//u);
       expect(sbomText).not.toContain("prooftape-release-pack-");
+      expect(packageManifest.reproducibility).toEqual({
+        cleanSourceTrees: 2,
+        packageTarballs: "byte-identical",
+        sbom: "byte-identical",
+        smokeResults: "byte-identical",
+      });
+      expect(checksums).toContain("  package-manifest.json\n");
+      expect(checksums).toContain("  sbom.cdx.json\n");
+      expect(checksums).toContain("  smoke-results.json\n");
     } finally {
       await rm(temporary, { recursive: true, force: true });
     }
-  }, 240_000);
+  }, 360_000);
 });

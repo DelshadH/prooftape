@@ -57,6 +57,8 @@ const capsule: CapsuleV1 = {
       callSiteFingerprint: "test.mjs:test",
       moduleKind: "esm",
       receiverKind: "none",
+      moduleSpecifier: "fixture",
+      targetKind: "export",
       argsBefore: ["x"],
       argsAfter: ["x"],
       outcome: "return",
@@ -122,6 +124,31 @@ describe("parseCapsule", () => {
     expect(() => parseCapsule(JSON.stringify(mismatched))).toThrow(
       /calls\/0\/dependency.*metadata dependency/,
     );
+    expect(() => parseCapsule(JSON.stringify({
+      ...capsule,
+      calls: [{ ...capsule.calls[0], moduleSpecifier: "different-package" }],
+    }))).toThrow(/moduleSpecifier.*configured dependency/);
+  });
+
+  it("requires replay identity fields on every call", () => {
+    const {
+      moduleSpecifier: _moduleSpecifier,
+      ...withoutModuleSpecifier
+    } = capsule.calls[0]!;
+    expect(() => parseCapsule(JSON.stringify({
+      ...capsule,
+      calls: [withoutModuleSpecifier],
+    }))).toThrow(/moduleSpecifier/);
+    expect(() => parseCapsule(JSON.stringify({
+      ...capsule,
+      calls: [{
+        ...capsule.calls[0],
+        moduleKind: "esm",
+        receiverKind: "none",
+        exportPath: "default",
+        targetKind: "module",
+      }],
+    }))).toThrow(/module targets require/);
   });
 
   it("requires lowercase SHA-256 normalization hashes", () => {

@@ -78,6 +78,8 @@ describe("recording runtime", () => {
       "site-pt-secret-canary",
       "esm",
       "none",
+      "fixture-pt-secret-canary/subpath",
+      "export",
     );
 
     expect(JSON.stringify(calls)).not.toContain("pt-secret-canary");

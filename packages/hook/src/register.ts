@@ -50,6 +50,15 @@ const PACKAGE_SPECIFIER =
   /^(?:@[a-z0-9][a-z0-9._~-]*\/)?[a-z0-9][a-z0-9._~-]*(?:\/[a-z0-9][a-z0-9._~-]*)*$/u;
 const SESSION_ID = /^[a-zA-Z0-9_-]{8,64}$/u;
 
+export function recorderFailureExitCode(
+  recorderWriteFailed: boolean,
+  current: string | number | null | undefined,
+): string | number | null | undefined {
+  return recorderWriteFailed && (current === undefined || current === 0)
+    ? 86
+    : current;
+}
+
 function object(value: unknown, label: string): Record<string, unknown> {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     throw new Error(`${label} must be an object`);
@@ -258,9 +267,10 @@ export function registerProofTapeHooks(options: HookOptions): void {
   const writer = createWriter(options);
   let recorderWriteFailed = false;
   process.on("beforeExit", () => {
-    if (recorderWriteFailed && (process.exitCode === undefined || process.exitCode === 0)) {
-      process.exitCode = 86;
-    }
+    process.exitCode = recorderFailureExitCode(recorderWriteFailed, process.exitCode);
+  });
+  process.on("exit", (code) => {
+    process.exitCode = recorderFailureExitCode(recorderWriteFailed, code);
   });
   const recorderProcessId = `${process.pid}-${threadId}`;
   const runtime = createRuntime({
@@ -272,7 +282,7 @@ export function registerProofTapeHooks(options: HookOptions): void {
     emit: writer.writeCall,
     onInternalError: () => {
       recorderWriteFailed = true;
-      if (process.exitCode === undefined || process.exitCode === 0) process.exitCode = 86;
+      process.exitCode = recorderFailureExitCode(true, process.exitCode);
       try {
         writer.writeIssue({
           code: "PT_RECORDER_WRITE",

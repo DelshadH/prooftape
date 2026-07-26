@@ -32,8 +32,10 @@ export interface CallObservationV1 {
   readonly dependency: string;
   readonly exportPath: string;
   readonly callSiteFingerprint: string;
-  readonly moduleKind?: "esm" | "commonjs";
-  readonly receiverKind?: "none" | "parent";
+  readonly moduleKind: "esm" | "commonjs";
+  readonly receiverKind: "none" | "parent";
+  readonly moduleSpecifier: string;
+  readonly targetKind: "module" | "export";
   readonly argsBefore: JsonValue;
   readonly argsAfter: JsonValue;
   readonly outcome: OutcomeKind;
@@ -304,6 +306,8 @@ function parseCall(value: unknown, path: string): CallObservationV1 {
       "callSiteFingerprint",
       "moduleKind",
       "receiverKind",
+      "moduleSpecifier",
+      "targetKind",
       "argsBefore",
       "argsAfter",
       "outcome",
@@ -320,6 +324,10 @@ function parseCall(value: unknown, path: string): CallObservationV1 {
       "dependency",
       "exportPath",
       "callSiteFingerprint",
+      "moduleKind",
+      "receiverKind",
+      "moduleSpecifier",
+      "targetKind",
       "argsBefore",
       "argsAfter",
       "outcome",
@@ -349,8 +357,10 @@ function parseCall(value: unknown, path: string): CallObservationV1 {
     dependency: string;
     exportPath: string;
     callSiteFingerprint: string;
-    moduleKind?: "esm" | "commonjs";
-    receiverKind?: "none" | "parent";
+    moduleKind: "esm" | "commonjs";
+    receiverKind: "none" | "parent";
+    moduleSpecifier: string;
+    targetKind: "module" | "export";
     argsBefore: JsonValue;
     argsAfter: JsonValue;
     outcome: OutcomeKind;
@@ -370,24 +380,26 @@ function parseCall(value: unknown, path: string): CallObservationV1 {
       `${path}/callSiteFingerprint`,
       2_048,
     ),
+    moduleKind: object.moduleKind === "esm" || object.moduleKind === "commonjs"
+      ? object.moduleKind
+      : fail(`${path}/moduleKind`, "expected esm or commonjs"),
+    receiverKind: object.receiverKind === "none" || object.receiverKind === "parent"
+      ? object.receiverKind
+      : fail(`${path}/receiverKind`, "expected none or parent"),
+    moduleSpecifier: stringValue(
+      object.moduleSpecifier,
+      `${path}/moduleSpecifier`,
+      256,
+    ),
+    targetKind: object.targetKind === "module" || object.targetKind === "export"
+      ? object.targetKind
+      : fail(`${path}/targetKind`, "expected module or export"),
     argsBefore: jsonValue(object.argsBefore, `${path}/argsBefore`),
     argsAfter: jsonValue(object.argsAfter, `${path}/argsAfter`),
     outcome,
   };
   if (hasValue) result.value = jsonValue(object.value, `${path}/value`);
   if (hasError) result.error = parseError(object.error, `${path}/error`);
-  if (Object.prototype.hasOwnProperty.call(object, "moduleKind")) {
-    if (object.moduleKind !== "esm" && object.moduleKind !== "commonjs") {
-      fail(`${path}/moduleKind`, "expected esm or commonjs");
-    }
-    result.moduleKind = object.moduleKind;
-  }
-  if (Object.prototype.hasOwnProperty.call(object, "receiverKind")) {
-    if (object.receiverKind !== "none" && object.receiverKind !== "parent") {
-      fail(`${path}/receiverKind`, "expected none or parent");
-    }
-    result.receiverKind = object.receiverKind;
-  }
   if (Object.prototype.hasOwnProperty.call(object, "unsupported")) {
     if (!Array.isArray(object.unsupported)) fail(`${path}/unsupported`, "expected array");
     result.unsupported = object.unsupported.map((item, index) =>
@@ -545,6 +557,28 @@ export function parseCapsule(input: string | Uint8Array): CapsuleV1 {
       fail(
         `/calls/${index}/dependency`,
         "does not match the capsule metadata dependency",
+      );
+    }
+    if (
+      call.moduleSpecifier !== metadata.dependency.name
+      && !call.moduleSpecifier.startsWith(`${metadata.dependency.name}/`)
+    ) {
+      fail(
+        `/calls/${index}/moduleSpecifier`,
+        "is not the configured dependency or one of its subpaths",
+      );
+    }
+    if (
+      call.targetKind === "module"
+      && (
+        call.moduleKind !== "commonjs"
+        || call.receiverKind !== "none"
+        || call.exportPath !== "default"
+      )
+    ) {
+      fail(
+        `/calls/${index}/targetKind`,
+        "module targets require a CommonJS default call without a receiver",
       );
     }
   }

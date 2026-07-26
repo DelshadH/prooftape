@@ -86,19 +86,15 @@ function sort(value) {
 
 const requireFromCheckout = createRequire(pathToFileURL(join(process.cwd(), "package.json")));
 const dependencyModule = input.moduleKind === "commonjs"
-  ? requireFromCheckout(input.dependency)
-  : await import(pathToFileURL(requireFromCheckout.resolve(input.dependency)).href);
-const parts = input.exportPath.split(".");
-const firstPart = parts.shift();
-let target = input.moduleKind === "commonjs" && firstPart === "default"
-  ? dependencyModule
-  : firstPart === "default"
-    ? dependencyModule.default
-    : dependencyModule[firstPart];
-let receiver = input.receiverKind === "parent" ? dependencyModule : undefined;
-for (const part of parts) {
-  if (input.receiverKind === "parent") receiver = target;
-  target = target[part];
+  ? requireFromCheckout(input.moduleSpecifier)
+  : await import(pathToFileURL(requireFromCheckout.resolve(input.moduleSpecifier)).href);
+let target = dependencyModule;
+let receiver;
+if (input.targetKind === "export") {
+  for (const part of input.exportPath.split(".")) {
+    if (input.receiverKind === "parent") receiver = target;
+    target = target[part];
+  }
 }
 const args = revive(input.argsBefore);
 let actual;
@@ -161,8 +157,12 @@ function reproducibleDifference(
     && (difference.candidate.normalization?.length ?? 0) === 0
     && difference.base.moduleKind !== undefined
     && difference.base.receiverKind !== undefined
+    && difference.base.moduleSpecifier !== undefined
+    && difference.base.targetKind !== undefined
     && difference.base.moduleKind === difference.candidate.moduleKind
     && difference.base.receiverKind === difference.candidate.receiverKind
+    && difference.base.moduleSpecifier === difference.candidate.moduleSpecifier
+    && difference.base.targetKind === difference.candidate.targetKind
     && !containsUnsafeReplayValue(difference.base.argsBefore)
     && !containsUnsafeReplayValue(observationOutcome(difference.base))
     && !containsUnsafeReplayValue(observationOutcome(difference.candidate))
@@ -205,6 +205,8 @@ export async function generateReproduction(
     exportPath: difference.base.exportPath,
     moduleKind: difference.base.moduleKind!,
     receiverKind: difference.base.receiverKind!,
+    moduleSpecifier: difference.base.moduleSpecifier!,
+    targetKind: difference.base.targetKind!,
     argsBefore: difference.base.argsBefore,
     expectedBase: observationOutcome(difference.base),
     observedCandidate: observationOutcome(difference.candidate),

@@ -293,6 +293,90 @@ describe("Node module interception", () => {
     ]);
   });
 
+  it("executes correctly when application modules shadow globalThis and Symbol", async () => {
+    const fixture = await writeFixture("esm");
+    await writeFile(
+      fixture.app,
+      [
+        'import { add } from "fixture";',
+        "const globalThis = {};",
+        "const Symbol = { for() { throw new Error('application binding'); } };",
+        "process.stdout.write(String(add(2, 3)));",
+      ].join("\n"),
+    );
+
+    const plain = run(fixture.app, fixture.directory);
+    const instrumented = run(fixture.app, fixture.directory, {
+      schemaVersion: "1",
+      dependency: "fixture",
+      outputDirectory: fixture.output,
+      sessionId: "shadowglobals1",
+      limits: {
+        maxEvents: 100,
+        maxEventBytes: 65_536,
+        maxDepth: 12,
+        maxCollectionEntries: 100,
+        maxStringBytes: 16_384,
+      },
+      redactLiterals: [],
+    });
+
+    expect(instrumented.status, instrumented.stderr).toBe(0);
+    expect(instrumented.stdout).toBe(plain.stdout);
+    expect(await observations(fixture.output)).toContainEqual(
+      expect.objectContaining({ kind: "call" }),
+    );
+  });
+
+  it("keeps recorder write failure nonzero across explicit process.exit(0)", async () => {
+    const fixture = await writeFixture("esm");
+    await writeFile(
+      fixture.app,
+      [
+        'import { closeSync, fstatSync, statSync } from "node:fs";',
+        'import { join } from "node:path";',
+        'import { add } from "fixture";',
+        "add(1, 2);",
+        "const config = JSON.parse(process.env.PROOFTAPE_CONFIG);",
+        "const raw = join(config.outputDirectory, `raw-${config.sessionId}-${process.pid}-0.jsonl`);",
+        "const expected = statSync(raw);",
+        "let closed = false;",
+        "for (let fd = 3; fd < 256; fd += 1) {",
+        "  try {",
+        "    const actual = fstatSync(fd);",
+        "    if (actual.dev === expected.dev && actual.ino === expected.ino) {",
+        "      closeSync(fd);",
+        "      closed = true;",
+        "      break;",
+        "    }",
+        "  } catch {}",
+        "}",
+        "if (!closed) process.exit(91);",
+        "add(3, 4);",
+        "process.exit(0);",
+      ].join("\n"),
+    );
+
+    const instrumented = run(fixture.app, fixture.directory, {
+      schemaVersion: "1",
+      dependency: "fixture",
+      outputDirectory: fixture.output,
+      sessionId: "writefailure1",
+      limits: {
+        maxEvents: 100,
+        maxEventBytes: 65_536,
+        maxDepth: 12,
+        maxCollectionEntries: 100,
+        maxStringBytes: 16_384,
+      },
+      redactLiterals: [],
+    });
+
+    expect(instrumented.status, instrumented.stderr).toBe(86);
+    expect((await observations(fixture.output)).filter((record) => record.kind === "call"))
+      .toHaveLength(1);
+  });
+
   it("reports event count and event byte loss explicitly", async () => {
     const countFixture = await writeFixture("esm");
     await writeFile(

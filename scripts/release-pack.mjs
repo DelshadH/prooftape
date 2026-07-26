@@ -242,7 +242,7 @@ function verifyPackedFiles(name, result) {
   return expectedFilename;
 }
 
-async function packPackages(packDirectory) {
+async function packPackages(packDirectory, sourceRoot = root) {
   const packed = [];
   for (const name of PACKAGE_NAMES) {
     const stdout = successfulText("npm", [
@@ -252,7 +252,7 @@ async function packPackages(packDirectory) {
       name,
       "--pack-destination",
       packDirectory,
-    ]);
+    ], { cwd: sourceRoot });
     const parsed = JSON.parse(stdout);
     if (!Array.isArray(parsed) || parsed.length !== 1) {
       throw new Error(`npm pack returned unexpected JSON for ${name}`);
@@ -278,6 +278,24 @@ async function packPackages(packDirectory) {
     });
   }
   return packed;
+}
+
+async function prepareCleanSourceTree(directory, commitSha) {
+  successfulText("git", ["worktree", "add", "--detach", directory, commitSha]);
+  successfulText("npm", [
+    "ci",
+    "--ignore-scripts",
+    "--no-audit",
+    "--no-fund",
+  ], { cwd: directory });
+  successfulText("npm", ["run", "build"], { cwd: directory });
+}
+
+function removeCleanSourceTree(directory) {
+  const result = run("git", ["worktree", "remove", "--force", directory]);
+  if (result.status !== 0) {
+    throw new Error(`could not remove release worktree ${directory}`);
+  }
 }
 
 async function verifyInstalledPackages(installDirectory) {
@@ -379,6 +397,9 @@ function sanitizeAndValidateSbom(sbom, packed) {
   delete sbom.serialNumber;
   if (sbom.metadata && typeof sbom.metadata === "object") {
     delete sbom.metadata.timestamp;
+    if (sbom.metadata.component && typeof sbom.metadata.component === "object") {
+      sbom.metadata.component.name = "prooftape-release-sbom";
+    }
   }
   const serialized = JSON.stringify(sbom);
   if (
@@ -402,6 +423,38 @@ function verifyIndependentPackBuilds(first, second) {
   if (JSON.stringify(summarize(first)) !== JSON.stringify(summarize(second))) {
     throw new Error("independent package builds are not byte-reproducible");
   }
+}
+
+async function installPackedPackages(directory, packed, name) {
+  await mkdir(directory);
+  await writeFile(
+    join(directory, "package.json"),
+    JSON.stringify({
+      name,
+      version: "0.0.0",
+      private: true,
+      type: "module",
+    }),
+  );
+  successfulText("npm", [
+    "install",
+    "--ignore-scripts",
+    "--no-audit",
+    "--no-fund",
+    ...packed.map((entry) => entry.tarballPath),
+  ], { cwd: directory });
+  await verifyInstalledPackages(directory);
+}
+
+async function buildSbom(directory, packed) {
+  await installPackedPackages(directory, packed, "prooftape-release-sbom");
+  const sbomText = successfulText("npm", [
+    "sbom",
+    "--omit=dev",
+    "--sbom-format",
+    "cyclonedx",
+  ], { cwd: directory });
+  return jsonLine(sanitizeAndValidateSbom(JSON.parse(sbomText), packed));
 }
 
 async function smokeInstalledCli(temporary, installDirectory) {
@@ -651,64 +704,59 @@ async function prepareRelease() {
 
   await assertCleanCheckout();
   await verifyWorkspaceVersions();
-  successfulText("npm", ["run", "build"]);
+  const commitSha = successfulText("git", ["rev-parse", "HEAD"]);
 
   const temporary = await mkdtemp(join(tmpdir(), "prooftape-release-pack-"));
+  const sourceOne = join(temporary, "source-one");
+  const sourceTwo = join(temporary, "source-two");
+  let sourceOneAdded = false;
+  let sourceTwoAdded = false;
   try {
-    const packDirectory = join(temporary, "packs");
-    const verificationPackDirectory = join(temporary, "packs-verification");
-    const installDirectory = join(temporary, "install");
-    const sbomDirectory = join(temporary, "sbom-install");
+    await prepareCleanSourceTree(sourceOne, commitSha);
+    sourceOneAdded = true;
+    await prepareCleanSourceTree(sourceTwo, commitSha);
+    sourceTwoAdded = true;
+    const packDirectory = join(temporary, "packs-one");
+    const verificationPackDirectory = join(temporary, "packs-two");
+    const installDirectory = join(temporary, "install-one");
+    const verificationInstallDirectory = join(temporary, "install-two");
+    const sbomDirectory = join(temporary, "sbom-one");
+    const verificationSbomDirectory = join(temporary, "sbom-two");
+    const smokeTemporary = join(temporary, "smoke-one");
+    const verificationSmokeTemporary = join(temporary, "smoke-two");
     await mkdir(packDirectory);
     await mkdir(verificationPackDirectory);
-    await mkdir(installDirectory);
-    await mkdir(sbomDirectory);
-    const packed = await packPackages(packDirectory);
-    const verificationPacked = await packPackages(verificationPackDirectory);
+    await mkdir(smokeTemporary);
+    await mkdir(verificationSmokeTemporary);
+    const packed = await packPackages(packDirectory, sourceOne);
+    const verificationPacked = await packPackages(verificationPackDirectory, sourceTwo);
     verifyIndependentPackBuilds(packed, verificationPacked);
-    await writeFile(
-      join(installDirectory, "package.json"),
-      JSON.stringify({
-        name: "prooftape-release-smoke",
-        version: "0.0.0",
-        private: true,
-        type: "module",
-      }),
+    await installPackedPackages(
+      installDirectory,
+      packed,
+      "prooftape-release-smoke-one",
     );
-    successfulText("npm", [
-      "install",
-      "--ignore-scripts",
-      "--no-audit",
-      "--no-fund",
-      ...packed.map((entry) => entry.tarballPath),
-    ], { cwd: installDirectory });
-    await verifyInstalledPackages(installDirectory);
-    await writeFile(
-      join(sbomDirectory, "package.json"),
-      JSON.stringify({
-        name: "prooftape-release-sbom",
-        version: "0.0.0",
-        private: true,
-      }),
+    await installPackedPackages(
+      verificationInstallDirectory,
+      verificationPacked,
+      "prooftape-release-smoke-two",
     );
-    successfulText("npm", [
-      "install",
-      "--ignore-scripts",
-      "--no-audit",
-      "--no-fund",
-      ...packed.map((entry) => entry.tarballPath),
-    ], { cwd: sbomDirectory });
-    await verifyInstalledPackages(sbomDirectory);
-    const sbomText = successfulText("npm", [
-      "sbom",
-      "--omit=dev",
-      "--sbom-format",
-      "cyclonedx",
-    ], { cwd: sbomDirectory });
-    const sbom = sanitizeAndValidateSbom(JSON.parse(sbomText), packed);
-    const sbomOutput = jsonLine(sbom);
-    const smoke = await smokeInstalledCli(temporary, installDirectory);
-    const commitSha = successfulText("git", ["rev-parse", "HEAD"]);
+    const sbomOutput = await buildSbom(sbomDirectory, packed);
+    const verificationSbomOutput = await buildSbom(
+      verificationSbomDirectory,
+      verificationPacked,
+    );
+    if (sbomOutput !== verificationSbomOutput) {
+      throw new Error("independent SBOM builds are not byte-reproducible");
+    }
+    const smoke = await smokeInstalledCli(smokeTemporary, installDirectory);
+    const verificationSmoke = await smokeInstalledCli(
+      verificationSmokeTemporary,
+      verificationInstallDirectory,
+    );
+    if (JSON.stringify(smoke) !== JSON.stringify(verificationSmoke)) {
+      throw new Error("independent package smoke results are not reproducible");
+    }
     const packageManifest = {
       schemaVersion: "1",
       kind: "prooftape-release-package-manifest",
@@ -716,6 +764,12 @@ async function prepareRelease() {
       commitSha,
       nodeVersion: process.version,
       npmVersion: successfulText("npm", ["--version"]),
+      reproducibility: {
+        cleanSourceTrees: 2,
+        packageTarballs: "byte-identical",
+        sbom: "byte-identical",
+        smokeResults: "byte-identical",
+      },
       packages: packed.map(({
         name,
         version,
@@ -739,9 +793,14 @@ async function prepareRelease() {
       observationAuthenticity: "not-established",
       smoke,
     };
-    const checksums = packed
-      .map((entry) => `${entry.sha256}  ${entry.filename}`)
-      .join("\n") + "\n";
+    const packageManifestOutput = jsonLine(packageManifest);
+    const smokeResultsOutput = jsonLine(smokeResults);
+    const checksums = [
+      ...packed.map((entry) => `${entry.sha256}  ${entry.filename}`),
+      `${sha256(Buffer.from(packageManifestOutput, "utf8"))}  package-manifest.json`,
+      `${sha256(Buffer.from(sbomOutput, "utf8"))}  sbom.cdx.json`,
+      `${sha256(Buffer.from(smokeResultsOutput, "utf8"))}  smoke-results.json`,
+    ].join("\n") + "\n";
     if (Buffer.byteLength(checksums, "utf8") > MAX_EVIDENCE_BYTES) {
       throw new Error("checksum evidence exceeds the 2 MiB limit");
     }
@@ -757,12 +816,12 @@ async function prepareRelease() {
     }
     await writeFile(
       join(outputPath, "package-manifest.json"),
-      jsonLine(packageManifest),
+      packageManifestOutput,
       { flag: "wx" },
     );
     await writeFile(
       join(outputPath, "smoke-results.json"),
-      jsonLine(smokeResults),
+      smokeResultsOutput,
       { flag: "wx" },
     );
     await writeFile(join(outputPath, "sbom.cdx.json"), sbomOutput, { flag: "wx" });
@@ -772,6 +831,8 @@ async function prepareRelease() {
         + `${relative(root, outputPath)}.\n`,
     );
   } finally {
+    if (sourceTwoAdded) removeCleanSourceTree(sourceTwo);
+    if (sourceOneAdded) removeCleanSourceTree(sourceOne);
     await rm(temporary, { recursive: true, force: true });
   }
 }

@@ -105,4 +105,4 @@ A hand-edited screenshot is not evidence.
 | PT-G09 | `npm run security` combines npm audit, license allowlist, production-install-script check, tracked-source secret scan, and workflow policy scan. |
 | PT-G15 | `npm run corpus` validates and executes `fixtures/compatibility-corpus/manifest.json`; `npm run smoke:examples` installs and runs each project-owned example from a temporary standalone checkout and validates the pinned read-only workflow templates. |
 | PT-G11 | `npm run performance` records seven raw sample pairs, environment, medians, and the enforced 2.0× budget. |
-| PT-G12 | The Node 24 quality job runs the demo, 15.5-second cast generation, real upgrades, performance, security, and package smoke from a clean checkout. |
+| PT-G12 | The Node 24 quality job runs the demo, 15.5-second cast generation, real upgrades, performance, security, and package smoke from a clean checkout; `scripts/release-pack.test.ts` builds from two detached clean source trees, compares tarballs, sanitized SBOMs, and packed smoke results byte-for-byte, and requires checksums for every retained evidence payload except the checksum index itself. |

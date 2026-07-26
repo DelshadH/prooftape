@@ -47,6 +47,15 @@ describe("quality-gate evidence output", () => {
     expect(workflow).toContain(
       "name: prooftape-0.1.0-alpha.1-rc-${{ github.event.pull_request.head.sha || github.sha }}",
     );
+    const reusableWorkflow = await readFile(
+      resolve(repository, ".github/workflows/prooftape.yml"),
+      "utf8",
+    );
+    expect(reusableWorkflow.match(/ref: \$\{\{ github\.workflow_sha \}\}/gu))
+      .toHaveLength(3);
+    expect(reusableWorkflow).not.toContain(
+      "0f6a7e6ad17ca0c929ca60fb814f9f7682215dc4",
+    );
   });
 
   it("requires a protected tokenless OIDC release workflow", async () => {
