@@ -87,7 +87,7 @@ async function installedCommonJsFixture(value: string): Promise<string> {
   return directory;
 }
 
-async function installedConditionalEsmFixture(value: string): Promise<string> {
+async function installedConditionalEsmFixture(): Promise<string> {
   const directory = await mkdtemp(join(tmpdir(), "prooftape-repro-conditional-"));
   const dependency = join(directory, "node_modules", "fixture");
   await mkdir(dependency, { recursive: true });
@@ -106,7 +106,7 @@ async function installedConditionalEsmFixture(value: string): Promise<string> {
   );
   await writeFile(
     join(dependency, "import.js"),
-    `export function value() { return ${JSON.stringify(value)}; }\n`,
+    'export function value() { return "before"; }\n',
   );
   await writeFile(
     join(dependency, "require.cjs"),
@@ -267,7 +267,7 @@ describe("generateReproduction", () => {
     const root = await mkdtemp(join(tmpdir(), "prooftape-repro-"));
     const directory = join(root, "repro");
     await generateReproduction(base, candidate, report, directory);
-    const environment = await installedConditionalEsmFixture("before");
+    const environment = await installedConditionalEsmFixture();
 
     const run = spawnSync(process.execPath, [join(directory, "repro.mjs")], {
       cwd: environment,
