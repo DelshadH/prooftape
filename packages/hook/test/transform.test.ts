@@ -160,6 +160,12 @@ describe("transformApplicationSource", () => {
         'const fixture = require("fixture");',
         "fixture();",
       ].join("\n"),
+      [
+        "const local = () => 0;",
+        "if (true) { function require() { return local; } }",
+        'const fixture = require("fixture");',
+        "fixture();",
+      ].join("\n"),
     ];
 
     for (const source of cases) {

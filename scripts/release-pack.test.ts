@@ -5,7 +5,6 @@ import {
   readFile,
   readdir,
   rm,
-  symlink,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
@@ -39,11 +38,6 @@ describe("release-pack", () => {
           );
         },
       });
-      await symlink(
-        join(repository, "node_modules"),
-        join(checkout, "node_modules"),
-        process.platform === "win32" ? "junction" : "dir",
-      );
       expect(run("git", ["init", "-q"], checkout).status).toBe(0);
       expect(run("git", ["add", "."], checkout).status).toBe(0);
       expect(run("git", [
