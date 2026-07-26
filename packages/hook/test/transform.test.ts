@@ -65,6 +65,39 @@ describe("transformApplicationSource", () => {
     expect(result.source).toMatch(/__prooftapeRuntime\d+\.invoke\("fixture","add"/u);
   });
 
+  it("rejects modules that shadow both supported Node global aliases", () => {
+    const source = [
+      'import { add } from "fixture";',
+      "const globalThis = {};",
+      "const global = {};",
+      "add(1, 2);",
+    ].join("\n");
+
+    const result = transformApplicationSource(source, { ...options, format: "module" });
+
+    expect(result.source).toBe(source);
+    expect(result.issues).toContainEqual({
+      code: "PT_UNSUPPORTED_GLOBAL_BINDING",
+      message: "application bindings shadow both supported Node global aliases",
+    });
+  });
+
+  it("does not attribute loop or switch lexical bindings to the dependency", () => {
+    const loop = [
+      'import { add } from "fixture";',
+      "for (const add of [(value) => value * 3]) { add(2); }",
+    ].join("\n");
+    const switchScope = [
+      'import { add } from "fixture";',
+      "switch (1) { case 1: const add = (value) => value * 3; add(2); break; }",
+    ].join("\n");
+
+    expect(transformApplicationSource(loop, { ...options, format: "module" }).source)
+      .toBe(loop);
+    expect(transformApplicationSource(switchScope, { ...options, format: "module" }).source)
+      .toBe(switchScope);
+  });
+
   it("rejects function-scoped CommonJS bindings instead of silently partially capturing", () => {
     const source = [
       'const stable = require("fixture");',
@@ -177,6 +210,18 @@ describe("transformApplicationSource", () => {
 
     expect(result.source).toBe(source);
     expect(result.issues).toContainEqual({
+      code: "PT_UNSUPPORTED_REASSIGNMENT",
+      message: "reassigned dependency bindings cannot be attributed transparently",
+    });
+
+    const destructured = [
+      'let fixture = require("fixture");',
+      "({ fixture } = { fixture: (value) => value * 3 });",
+      "fixture(2);",
+    ].join("\n");
+    expect(
+      transformApplicationSource(destructured, { ...options, format: "commonjs" }).issues,
+    ).toContainEqual({
       code: "PT_UNSUPPORTED_REASSIGNMENT",
       message: "reassigned dependency bindings cannot be attributed transparently",
     });

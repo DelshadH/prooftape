@@ -87,6 +87,34 @@ async function installedCommonJsFixture(value: string): Promise<string> {
   return directory;
 }
 
+async function installedConditionalEsmFixture(value: string): Promise<string> {
+  const directory = await mkdtemp(join(tmpdir(), "prooftape-repro-conditional-"));
+  const dependency = join(directory, "node_modules", "fixture");
+  await mkdir(dependency, { recursive: true });
+  await writeFile(join(directory, "package.json"), JSON.stringify({ type: "module" }));
+  await writeFile(
+    join(dependency, "package.json"),
+    JSON.stringify({
+      name: "fixture",
+      version: "1.0.0",
+      type: "module",
+      exports: {
+        import: "./import.js",
+        require: "./require.cjs",
+      },
+    }),
+  );
+  await writeFile(
+    join(dependency, "import.js"),
+    `export function value() { return ${JSON.stringify(value)}; }\n`,
+  );
+  await writeFile(
+    join(dependency, "require.cjs"),
+    'module.exports = { value() { return "wrong-require-branch"; } };\n',
+  );
+  return directory;
+}
+
 describe("generateReproduction", () => {
   it("creates a versioned reproduction that matches base and fails candidate", async () => {
     const base = capsule("before", "1.0.0", "a");
@@ -223,6 +251,23 @@ describe("generateReproduction", () => {
       join(dependency, "subpath.cjs"),
       'module.exports = { prefix: "before", default(input) { return this.prefix + input; } };\n',
     );
+
+    const run = spawnSync(process.execPath, [join(directory, "repro.mjs")], {
+      cwd: environment,
+      encoding: "utf8",
+      windowsHide: true,
+    });
+    expect(run.status, run.stderr).toBe(0);
+  });
+
+  it("replays the import branch of ESM conditional exports", async () => {
+    const base = capsule("before", "1.0.0", "a");
+    const candidate = capsule("after", "2.0.0", "e");
+    const report = buildReport(base, candidate);
+    const root = await mkdtemp(join(tmpdir(), "prooftape-repro-"));
+    const directory = join(root, "repro");
+    await generateReproduction(base, candidate, report, directory);
+    const environment = await installedConditionalEsmFixture("before");
 
     const run = spawnSync(process.execPath, [join(directory, "repro.mjs")], {
       cwd: environment,

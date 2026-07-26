@@ -51,7 +51,9 @@ describe("quality-gate evidence output", () => {
       resolve(repository, ".github/workflows/prooftape.yml"),
       "utf8",
     );
-    expect(reusableWorkflow.match(/ref: \$\{\{ github\.workflow_sha \}\}/gu))
+    expect(reusableWorkflow.match(/repository: \$\{\{ job\.workflow_repository \}\}/gu))
+      .toHaveLength(3);
+    expect(reusableWorkflow.match(/ref: \$\{\{ job\.workflow_sha \}\}/gu))
       .toHaveLength(3);
     expect(reusableWorkflow).not.toContain(
       "0f6a7e6ad17ca0c929ca60fb814f9f7682215dc4",
