@@ -2,21 +2,23 @@
 
 ## Unreleased
 
-## 0.1.0-alpha.1 - 2026-07-25
+## 0.1.0-alpha.1 (unpublished release candidate)
 
 - Declared the capsule, report, and reproduction-manifest JSON shapes as the
   stable public version 1 contract from the first alpha.
 - Added coherent exact package versions, package-specific trust documentation
   and licenses, bounded clean-room tarball preparation, SHA-256 sums, a
   CycloneDX SBOM, and installed-package CLI/exit-contract smoke.
-- Added a protected, tokenless npm trusted-publishing workflow with GitHub OIDC
-  provenance and the `alpha` distribution tag. Release evidence is built and
-  uploaded before approval; OIDC permission exists only in the protected
-  publication job.
+- Prepared a protected, tokenless npm trusted-publishing workflow with GitHub
+  OIDC provenance and the `alpha` distribution tag. Release evidence is built
+  and uploaded before publication; OIDC permission exists only in the
+  protected publication job.
 - Implemented strict version 1 capsule and report parsers, canonical JSON,
   bounded value serialization, redaction, and audited literal normalization.
-- Implemented ESM and CommonJS application-call instrumentation with explicit
-  unsupported handling and semantic-transparency fixtures.
+- Implemented synchronous ESM and CommonJS application-call instrumentation
+  with explicit unsupported handling and semantic-transparency fixtures.
+- Preserved native Promise and unhandled-rejection semantics by returning
+  Promise objects unchanged and classifying settlement capture as unsupported.
 - Implemented exact-revision recording, isolated npm-lockfile worktrees,
   behavior matching, blocking diffs, the public exit contract, and
   base/candidate-executed minimal reproductions.

@@ -4,7 +4,12 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
-import { compareRevisions, HarnessError, sha256 } from "../src/index.js";
+import {
+  compareRevisions,
+  HarnessError,
+  sha256,
+  UnsupportedCaptureError,
+} from "../src/index.js";
 
 function command(cwd: string, executable: string, args: readonly string[]): string {
   const result = spawnSync(executable, args, {
@@ -107,6 +112,20 @@ async function fixtureRepository(): Promise<{
 }
 
 describe("compareRevisions", () => {
+  it("classifies malformed commit identifiers as unsupported input", async () => {
+    await expect(compareRevisions({
+      cwd: process.cwd(),
+      baseRef: "not-a-sha",
+      candidateRef: "a".repeat(40),
+      dependency: "fixture",
+      command: [process.execPath, "test.mjs"],
+      hookUrl: pathToFileURL(resolve("packages/hook/dist/register.js")).href,
+      prooftapeVersion: "0.0.0",
+      redactLiterals: [],
+      timeoutMilliseconds: 20_000,
+      maxOutputBytes: 64 * 1024,
+    })).rejects.toBeInstanceOf(UnsupportedCaptureError);
+  });
   it("records exact isolated npm-lockfile worktrees and verifies a reproduction", async () => {
     const fixture = await fixtureRepository();
     const reproDirectory = join(fixture.directory, "repro");

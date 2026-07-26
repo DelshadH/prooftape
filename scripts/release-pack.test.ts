@@ -71,6 +71,8 @@ describe("release-pack", () => {
       const smokeResults = JSON.parse(
         await readFile(join(output, "smoke-results.json"), "utf8"),
       );
+      const sbomText = await readFile(join(output, "sbom.cdx.json"), "utf8");
+      const sbom = JSON.parse(sbomText);
       expect({
         version: packageManifest.version,
         packages: packageManifest.packages.map(
@@ -104,6 +106,11 @@ describe("release-pack", () => {
       ]));
       expect((await readdir(output)).filter((name) => name.endsWith(".tgz")))
         .toHaveLength(4);
+      expect(sbom.components?.some(
+        (component: { name?: string }) => component.name === "fixture",
+      )).toBe(false);
+      expect(sbomText).not.toMatch(/file:[A-Za-z]:[\\/]|file:\/(?:tmp|private\/tmp)\//u);
+      expect(sbomText).not.toContain("prooftape-release-pack-");
     } finally {
       await rm(temporary, { recursive: true, force: true });
     }

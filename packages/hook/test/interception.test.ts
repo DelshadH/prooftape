@@ -152,13 +152,21 @@ describe("Node module interception", () => {
       const records = await observations(fixture.output);
       const calls = records
         .filter((record) => record.kind === "call")
-        .map((record) => record.call as { exportPath: string; outcome: string });
+        .map((record) => record.call as {
+          exportPath: string;
+          outcome: string;
+          unsupported?: readonly { reason: string }[];
+        });
       expect(calls.map((call) => call.exportPath)).toEqual(
         format === "esm"
           ? ["add", "toolbox.bump", "later"]
           : ["default", "add"],
       );
-      expect(calls.at(-1)?.outcome).toBe(format === "esm" ? "resolve" : "return");
+      expect(calls.at(-1)?.outcome).toBe("return");
+      if (format === "esm") {
+        expect(calls.at(-1)?.unsupported?.map((item) => item.reason))
+          .toContain("unsupported-prototype");
+      }
     });
   }
 

@@ -46,7 +46,8 @@ interface RawIssueRecord {
 type RawRecord = RawCallRecord | RawIssueRecord;
 
 const RUNTIME_SYMBOL = Symbol.for("prooftape.runtime.v1");
-const PACKAGE_NAME = /^(?:@[a-z0-9][a-z0-9._~-]*\/)?[a-z0-9][a-z0-9._~-]*$/u;
+const PACKAGE_SPECIFIER =
+  /^(?:@[a-z0-9][a-z0-9._~-]*\/)?[a-z0-9][a-z0-9._~-]*(?:\/[a-z0-9][a-z0-9._~-]*)*$/u;
 const SESSION_ID = /^[a-zA-Z0-9_-]{8,64}$/u;
 
 function object(value: unknown, label: string): Record<string, unknown> {
@@ -107,8 +108,8 @@ export function parseHookOptions(raw: string): HookOptions {
     "PROOFTAPE_CONFIG",
   );
   if (config.schemaVersion !== "1") throw new Error("unsupported hook schemaVersion");
-  if (typeof config.dependency !== "string" || !PACKAGE_NAME.test(config.dependency)) {
-    throw new Error("dependency must be an exact npm package name");
+  if (typeof config.dependency !== "string" || !PACKAGE_SPECIFIER.test(config.dependency)) {
+    throw new Error("dependency must be an exact npm package name with an optional subpath");
   }
   if (typeof config.outputDirectory !== "string" || !isAbsolute(config.outputDirectory)) {
     throw new Error("outputDirectory must be absolute");
@@ -206,6 +207,9 @@ function createWriter(options: HookOptions): {
       return;
     }
     const line = `${JSON.stringify(record)}\n`;
+    if (options.redactLiterals.some((literal) => literal.length > 0 && line.includes(literal))) {
+      throw new Error("configured redaction literal remained in a raw observation");
+    }
     if (Buffer.byteLength(line, "utf8") > options.limits.maxEventBytes) {
       if (!limitIssueWritten) {
         limitIssueWritten = true;
@@ -252,6 +256,12 @@ function createWriter(options: HookOptions): {
 
 export function registerProofTapeHooks(options: HookOptions): void {
   const writer = createWriter(options);
+  let recorderWriteFailed = false;
+  process.on("beforeExit", () => {
+    if (recorderWriteFailed && (process.exitCode === undefined || process.exitCode === 0)) {
+      process.exitCode = 86;
+    }
+  });
   const recorderProcessId = `${process.pid}-${threadId}`;
   const runtime = createRuntime({
     processId: recorderProcessId,
@@ -261,10 +271,16 @@ export function registerProofTapeHooks(options: HookOptions): void {
     redactLiterals: options.redactLiterals,
     emit: writer.writeCall,
     onInternalError: () => {
-      writer.writeIssue({
-        code: "PT_RECORDER_WRITE",
-        message: "the recorder could not persist an observation",
-      });
+      recorderWriteFailed = true;
+      if (process.exitCode === undefined || process.exitCode === 0) process.exitCode = 86;
+      try {
+        writer.writeIssue({
+          code: "PT_RECORDER_WRITE",
+          message: "the recorder could not persist an observation",
+        });
+      } catch {
+        // The exit status remains a separate parent-observable failure channel.
+      }
     },
   });
   if (Object.prototype.hasOwnProperty.call(globalThis, RUNTIME_SYMBOL)) {

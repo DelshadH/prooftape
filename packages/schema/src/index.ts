@@ -32,6 +32,8 @@ export interface CallObservationV1 {
   readonly dependency: string;
   readonly exportPath: string;
   readonly callSiteFingerprint: string;
+  readonly moduleKind?: "esm" | "commonjs";
+  readonly receiverKind?: "none" | "parent";
   readonly argsBefore: JsonValue;
   readonly argsAfter: JsonValue;
   readonly outcome: OutcomeKind;
@@ -300,6 +302,8 @@ function parseCall(value: unknown, path: string): CallObservationV1 {
       "dependency",
       "exportPath",
       "callSiteFingerprint",
+      "moduleKind",
+      "receiverKind",
       "argsBefore",
       "argsAfter",
       "outcome",
@@ -345,6 +349,8 @@ function parseCall(value: unknown, path: string): CallObservationV1 {
     dependency: string;
     exportPath: string;
     callSiteFingerprint: string;
+    moduleKind?: "esm" | "commonjs";
+    receiverKind?: "none" | "parent";
     argsBefore: JsonValue;
     argsAfter: JsonValue;
     outcome: OutcomeKind;
@@ -370,6 +376,18 @@ function parseCall(value: unknown, path: string): CallObservationV1 {
   };
   if (hasValue) result.value = jsonValue(object.value, `${path}/value`);
   if (hasError) result.error = parseError(object.error, `${path}/error`);
+  if (Object.prototype.hasOwnProperty.call(object, "moduleKind")) {
+    if (object.moduleKind !== "esm" && object.moduleKind !== "commonjs") {
+      fail(`${path}/moduleKind`, "expected esm or commonjs");
+    }
+    result.moduleKind = object.moduleKind;
+  }
+  if (Object.prototype.hasOwnProperty.call(object, "receiverKind")) {
+    if (object.receiverKind !== "none" && object.receiverKind !== "parent") {
+      fail(`${path}/receiverKind`, "expected none or parent");
+    }
+    result.receiverKind = object.receiverKind;
+  }
   if (Object.prototype.hasOwnProperty.call(object, "unsupported")) {
     if (!Array.isArray(object.unsupported)) fail(`${path}/unsupported`, "expected array");
     result.unsupported = object.unsupported.map((item, index) =>

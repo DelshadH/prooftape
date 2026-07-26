@@ -7,18 +7,18 @@ claim.
 | Gate | Required evidence | Release condition |
 |---|---|---|
 | PT-G13 | Clean toolchain and package bootstrap | Fresh Linux checkouts run locked install, typecheck, tests, package smoke, and CLI smoke on Node 22 and 24. |
-| PT-G01 | ESM and CJS interception feasibility | Supported sync/async calls are observed on Node 22 and 24 without changing outcomes, descriptors used by fixtures, or `this` behavior. |
+| PT-G01 | ESM and CJS interception feasibility | Supported synchronous calls are observed on Node 22 and 24 without changing outcomes, descriptors used by fixtures, or `this` behavior; native Promises remain unchanged and are explicit unsupported observations. |
 | PT-G02 | Canonical schema | Capsule, report, and reproduction-manifest golden fixtures parse from source and the packed clean-room install; repeated runs produce byte-identical canonical capsules; schemas reject unknown fields and incompatible versions. |
 | PT-G14 | Capture completeness | Under the documented non-adversarial-code assumption, child-process and parallel fixtures produce exact expected call counts; corruption or unsupported loss is explicit and nonzero, never silent. |
 | PT-G03 | No-change oracle | Base/candidate with identical behavior exits 0 and emits zero blocking differences across 20 repeated runs. |
 | PT-G04 | Green-tests/changed-behavior oracle | Both test commands exit 0; ProofTape exits 2 and identifies the exact changed return/throw with a runnable counterexample. |
-| PT-G05 | Mutation, rejection, and sequence | Fixtures independently prove changed argument mutation, async rejection, inserted/deleted calls, and ambiguous-match failure. |
+| PT-G05 | Mutation, error, and sequence | Fixtures independently prove changed argument mutation, throw/error contracts, inserted/deleted calls, and ambiguous-match failure; schema-level rejection differences remain parseable for compatibility. |
 | PT-G06 | Normalization audit | UUID/timestamp/path fixture is stable only when configured; report lists each transformation and never normalizes undeclared semantic fields. |
 | PT-G07 | Baseline integrity and authenticity boundary | Candidate code cannot retroactively change the held base capsule. A same-run adversarial fixture proves candidate code can forge its own raw stream; every capsule, report, reproduction manifest, and CLI verdict must explicitly mark observation authenticity as not established. Separate-job hashes are claimed only as transport integrity. |
 | PT-G08 | Real package evidence | Three isolated real npm upgrade fixtures; at least one is tied to a documented historical behavioral regression or breaking change, with source and reproducible lockfiles. |
 | PT-G09 | Security and privacy | Secret canaries never appear in raw/canonical reports; candidate-execution jobs have no secrets/write token; path traversal, oversized events, cycles, and malformed capsules are rejected. |
 | PT-G10 | Semantic transparency | Instrumented and uninstrumented supported fixtures have equal outcomes, visible exports, property descriptors required by contract, and error identity fields. |
-| PT-G15 | Public corpus and consumers | A machine-readable public corpus covers changed, clean, mutation, rejection, ambiguous, unsupported, child/worker, and adversarial cases; standalone ESM, CommonJS, child-process, Dependabot, and Renovate examples install and run from committed lockfiles. |
+| PT-G15 | Public corpus and consumers | A machine-readable public corpus runs case-bound changed, clean, mutation, throw/error, ambiguous, unsupported, child/worker, and adversarial commands; standalone ESM, CommonJS, child-process, Dependabot, and Renovate examples install and run from committed lockfiles. |
 | PT-G11 | Performance budget | Median wall-clock overhead is ≤2.0× on the published synthetic fixture; report includes raw samples and environment. This is a budget, not a universal claim. |
 | PT-G12 | Clean-room release | Linux clean checkout runs install, full tests, killer demo, package smoke test, and generated 15–20 second terminal recording from one command. |
 
@@ -94,11 +94,11 @@ A hand-edited screenshot is not evidence.
 | Gate | Verifier |
 |---|---|
 | PT-G13 | `.github/workflows/ci.yml` runs locked install, typecheck, all tests, audit, and packed CLI/Action smoke on Node 22 and 24. |
-| PT-G01, PT-G10 | `packages/hook/test/interception.test.ts`, `runtime.test.ts`, and `transform.test.ts` execute real ESM, CJS, native Promise, error, mutation, worker, and child-process fixtures. |
+| PT-G01, PT-G10 | `packages/hook/test/interception.test.ts`, `runtime.test.ts`, and `transform.test.ts` execute real ESM, CJS, native-Promise transparency, error, mutation, worker, and child-process fixtures. |
 | PT-G02, PT-G03 | Schema, capsule, serialization, and property tests plus the 20-run recording test prove strict parsing and byte-identical repetition; `scripts/package-smoke.mjs` parses all three committed v1 goldens through the packed `@prooftape/schema` installed in a clean temporary project. |
 | PT-G14 | Hook child/worker tests and raw-capsule corruption, session, line, file, and byte-limit tests make capture loss explicit. |
 | PT-G04 | `npm run demo` executes both green commands, returns ProofTape exit 2, and verifies the same report/reproduction match key. |
-| PT-G05 | Runtime, diff, report, and compare tests cover mutation, rejection, insertion, deletion, sequence, and ambiguous repeats. |
+| PT-G05 | Runtime, CLI-diff, report, and compare tests cover mutation, throw/rejection schema contracts, insertion, deletion, sequence, and ambiguous repeats. |
 | PT-G06 | `packages/core/test/normalize.test.ts` proves declared-only UUID, timestamp, and path normalization with an audit record per field. |
 | PT-G07 | `packages/core/test/compare.test.ts` protects held base evidence and detects checkout changes; `record.test.ts` executes a raw-stream forgery; `packages/cli/test/adversarial-compare.test.ts` proves a genuine A-to-B behavior change can be forged into a warned exit-0 result; schema, reproduction, and CLI tests require the machine-readable authenticity marker, generated warning, and terminal warning; `.github/workflows/prooftape.yml` separates jobs and binds artifact transport to producing-job hashes without claiming observation authorship. |
 | PT-G08 | `npm run real-upgrades` builds isolated Git histories from six committed lockfiles and tests `camelcase`, `is-number`, and `ms`. |

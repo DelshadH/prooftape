@@ -82,11 +82,38 @@ describe("buildReport", () => {
     )).toThrow(/environment/);
   });
 
+  it("rejects empty capsules instead of producing a clean verdict", () => {
+    const empty = { ...capsule("same"), calls: [] };
+    expect(() => buildReport(empty, empty)).toThrow(UnsupportedComparisonError);
+  });
+
   it("fails ambiguous repeated-call alignment as a harness error", () => {
     const base = capsule("same");
     const duplicate = { ...base.calls[0]!, callId: "p1:2", sequence: 2 };
     const repeated = { ...base, calls: [...base.calls, duplicate] };
 
     expect(() => buildReport(repeated, base)).toThrow(AmbiguousComparisonError);
+  });
+
+  it("rejects reports that would exceed the strict difference limit", () => {
+    const template = capsule("same");
+    const baseCalls = Array.from({ length: 10_000 }, (_, index) => ({
+      ...template.calls[0]!,
+      callId: `p1:${index + 1}`,
+      sequence: index + 1,
+      argsBefore: [index],
+      argsAfter: [index],
+      value: "before",
+    }));
+    const candidateCalls = baseCalls.map((call) => ({
+      ...call,
+      argsAfter: ["mutated", call.sequence],
+      value: "after",
+    })).reverse();
+
+    expect(() => buildReport(
+      { ...template, calls: baseCalls },
+      { ...template, calls: candidateCalls },
+    )).toThrow(UnsupportedComparisonError);
   });
 });

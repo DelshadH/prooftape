@@ -341,6 +341,69 @@ function requireCliStatus(label, actual, expected) {
   }
 }
 
+function sanitizeAndValidateSbom(sbom, packed) {
+  if (sbom.bomFormat !== "CycloneDX" || !Array.isArray(sbom.components)) {
+    throw new Error("npm sbom did not produce CycloneDX components");
+  }
+  const artifactByName = new Map(
+    packed.map((entry) => [entry.name, entry]),
+  );
+  const allowedNames = new Set([
+    ...artifactByName.keys(),
+    "acorn",
+  ]);
+  for (const component of sbom.components) {
+    if (!allowedNames.has(component.name)) {
+      throw new Error(`SBOM contains unexpected component ${JSON.stringify(component.name)}`);
+    }
+    const unsafeProperty = component.properties?.find((property) =>
+      property.value === "true"
+      && /(?:extraneous|dev)/iu.test(String(property.name))
+    );
+    if (unsafeProperty) {
+      throw new Error(`SBOM contains non-production component ${JSON.stringify(component.name)}`);
+    }
+    const artifact = artifactByName.get(component.name);
+    if (artifact && Array.isArray(component.externalReferences)) {
+      component.externalReferences = component.externalReferences.map((reference) =>
+        reference.type === "distribution"
+          ? {
+              ...reference,
+              url: `urn:prooftape:artifact:${artifact.filename}`,
+              hashes: [{ alg: "SHA-256", content: artifact.sha256 }],
+            }
+          : reference
+      );
+    }
+  }
+  delete sbom.serialNumber;
+  if (sbom.metadata && typeof sbom.metadata === "object") {
+    delete sbom.metadata.timestamp;
+  }
+  const serialized = JSON.stringify(sbom);
+  if (
+    /file:[A-Za-z]:[\\/]|file:\/(?:tmp|private\/tmp)\//u.test(serialized)
+    || serialized.includes("prooftape-release-pack-")
+  ) {
+    throw new Error("SBOM contains an ephemeral build-host path");
+  }
+  return sbom;
+}
+
+function verifyIndependentPackBuilds(first, second) {
+  const summarize = (entries) => entries.map((entry) => ({
+    name: entry.name,
+    version: entry.version,
+    filename: entry.filename,
+    sha256: entry.sha256,
+    size: entry.size,
+    files: entry.files,
+  }));
+  if (JSON.stringify(summarize(first)) !== JSON.stringify(summarize(second))) {
+    throw new Error("independent package builds are not byte-reproducible");
+  }
+}
+
 async function smokeInstalledCli(temporary, installDirectory) {
   const cli = join(installDirectory, "node_modules", "prooftape", "dist", "cli.js");
   const dependency = join(installDirectory, "node_modules", "fixture");
@@ -593,10 +656,16 @@ async function prepareRelease() {
   const temporary = await mkdtemp(join(tmpdir(), "prooftape-release-pack-"));
   try {
     const packDirectory = join(temporary, "packs");
+    const verificationPackDirectory = join(temporary, "packs-verification");
     const installDirectory = join(temporary, "install");
+    const sbomDirectory = join(temporary, "sbom-install");
     await mkdir(packDirectory);
+    await mkdir(verificationPackDirectory);
     await mkdir(installDirectory);
+    await mkdir(sbomDirectory);
     const packed = await packPackages(packDirectory);
+    const verificationPacked = await packPackages(verificationPackDirectory);
+    verifyIndependentPackBuilds(packed, verificationPacked);
     await writeFile(
       join(installDirectory, "package.json"),
       JSON.stringify({
@@ -614,18 +683,31 @@ async function prepareRelease() {
       ...packed.map((entry) => entry.tarballPath),
     ], { cwd: installDirectory });
     await verifyInstalledPackages(installDirectory);
-    const smoke = await smokeInstalledCli(temporary, installDirectory);
+    await writeFile(
+      join(sbomDirectory, "package.json"),
+      JSON.stringify({
+        name: "prooftape-release-sbom",
+        version: "0.0.0",
+        private: true,
+      }),
+    );
+    successfulText("npm", [
+      "install",
+      "--ignore-scripts",
+      "--no-audit",
+      "--no-fund",
+      ...packed.map((entry) => entry.tarballPath),
+    ], { cwd: sbomDirectory });
+    await verifyInstalledPackages(sbomDirectory);
     const sbomText = successfulText("npm", [
       "sbom",
       "--omit=dev",
       "--sbom-format",
       "cyclonedx",
-    ], { cwd: installDirectory });
-    const sbom = JSON.parse(sbomText);
-    if (sbom.bomFormat !== "CycloneDX") {
-      throw new Error("npm sbom did not produce CycloneDX");
-    }
+    ], { cwd: sbomDirectory });
+    const sbom = sanitizeAndValidateSbom(JSON.parse(sbomText), packed);
     const sbomOutput = jsonLine(sbom);
+    const smoke = await smokeInstalledCli(temporary, installDirectory);
     const commitSha = successfulText("git", ["rev-parse", "HEAD"]);
     const packageManifest = {
       schemaVersion: "1",

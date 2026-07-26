@@ -39,15 +39,18 @@ const DEFAULTS = Object.freeze({
 const SENSITIVE_KEY = /(?:authorization|cookie|credential|pass(?:word)?|secret|token|api[-_]?key)/i;
 const REDACTED = "[REDACTED]";
 
-function typeName(value: unknown): string {
+class RedactedKeyCollisionError extends Error {}
+
+function typeName(value: unknown, literals: readonly string[]): string {
   try {
     if (value === null) return "null";
     if (Array.isArray(value)) return "array";
     if (value instanceof Date) return "date";
     if (value instanceof Error) return "error";
-    return typeof value === "object"
+    const name = typeof value === "object"
       ? Object.getPrototypeOf(value)?.constructor?.name ?? "object"
       : typeof value;
+    return replaceLiterals(name, literals);
   } catch {
     return "unknown";
   }
@@ -63,17 +66,41 @@ function unsupportedValue(
   path: string,
   reason: UnsupportedValueReason,
   value: unknown,
+  literals: readonly string[],
 ): JsonValue {
-  unsupported.push({ path: path || "/", reason, type: typeName(value) });
+  unsupported.push({
+    path: replaceLiterals(path || "/", literals),
+    reason,
+    type: typeName(value, literals),
+  });
   return { $prooftape: "unsupported", reason };
 }
 
-function replaceLiterals(value: string, literals: readonly string[]): string {
+export function redactLiteralString(value: string, literals: readonly string[]): string {
   let result = value;
   for (const literal of literals) {
     if (literal.length > 0) result = result.split(literal).join(REDACTED);
   }
   return result;
+}
+
+const replaceLiterals = redactLiteralString;
+
+function dataProperty(
+  value: object,
+  key: string,
+): { readonly value?: unknown; readonly accessor: boolean } {
+  let current: object | null = value;
+  while (current !== null) {
+    const descriptor = Object.getOwnPropertyDescriptor(current, key);
+    if (descriptor) {
+      return descriptor.get || descriptor.set
+        ? { accessor: true }
+        : { accessor: false, value: descriptor.value };
+    }
+    current = Object.getPrototypeOf(current);
+  }
+  return { accessor: false };
 }
 
 export function serializeValue(value: unknown, options: SerializeOptions = {}): SerializeResult {
@@ -88,7 +115,7 @@ export function serializeValue(value: unknown, options: SerializeOptions = {}): 
 
   const visit = (current: unknown, path: string, depth: number): JsonValue => {
     if (depth > maxDepth) {
-      return unsupportedValue(unsupported, path, "max-depth", current);
+      return unsupportedValue(unsupported, path, "max-depth", current, redactLiterals);
     }
 
     if (current === null || typeof current === "boolean") return current;
@@ -96,7 +123,7 @@ export function serializeValue(value: unknown, options: SerializeOptions = {}): 
       const redacted = replaceLiterals(current, redactLiterals);
       return Buffer.byteLength(redacted, "utf8") <= maxStringBytes
         ? redacted
-        : unsupportedValue(unsupported, path, "max-string-bytes", current);
+        : unsupportedValue(unsupported, path, "max-string-bytes", current, redactLiterals);
     }
     if (typeof current === "number") {
       if (Number.isNaN(current)) return { $prooftape: "nan" };
@@ -110,29 +137,53 @@ export function serializeValue(value: unknown, options: SerializeOptions = {}): 
       return { $prooftape: "bigint", value: current.toString(10) };
     }
     if (typeof current === "function" || typeof current === "symbol") {
-      return unsupportedValue(unsupported, path, "unsupported-type", current);
+      return unsupportedValue(unsupported, path, "unsupported-type", current, redactLiterals);
     }
 
     try {
       if (current instanceof Date) {
         return Number.isNaN(current.getTime())
-          ? unsupportedValue(unsupported, path, "invalid-date", current)
+          ? unsupportedValue(unsupported, path, "invalid-date", current, redactLiterals)
           : { $prooftape: "date", value: current.toISOString() };
       }
 
       if (ancestors.has(current)) {
-        return unsupportedValue(unsupported, path, "cycle", current);
+        return unsupportedValue(unsupported, path, "cycle", current, redactLiterals);
       }
 
       if (current instanceof Error) {
+        const name = dataProperty(current, "name");
+        const message = dataProperty(current, "message");
         const errorValue: Record<string, JsonValue> = {
           $prooftape: "error",
-          message: replaceLiterals(current.message, redactLiterals),
-          name: current.name,
+          message: message.accessor
+            ? unsupportedValue(
+              unsupported,
+              pointer(path, "message"),
+              "accessor-property",
+              current,
+              redactLiterals,
+            )
+            : replaceLiterals(typeof message.value === "string" ? message.value : "", redactLiterals),
+          name: name.accessor
+            ? unsupportedValue(
+              unsupported,
+              pointer(path, "name"),
+              "accessor-property",
+              current,
+              redactLiterals,
+            )
+            : replaceLiterals(typeof name.value === "string" ? name.value : "Error", redactLiterals),
         };
         const code = Object.getOwnPropertyDescriptor(current, "code");
         if (code?.get || code?.set) {
-          errorValue.code = unsupportedValue(unsupported, pointer(path, "code"), "accessor-property", current);
+          errorValue.code = unsupportedValue(
+            unsupported,
+            pointer(path, "code"),
+            "accessor-property",
+            current,
+            redactLiterals,
+          );
         } else if (code && "value" in code) {
           errorValue.code = visit(code.value, pointer(path, "code"), depth + 1);
         }
@@ -143,19 +194,31 @@ export function serializeValue(value: unknown, options: SerializeOptions = {}): 
 
       const prototype = Object.getPrototypeOf(current);
       if (!Array.isArray(current) && prototype !== Object.prototype && prototype !== null) {
-        return unsupportedValue(unsupported, path, "unsupported-prototype", current);
+        return unsupportedValue(
+          unsupported,
+          path,
+          "unsupported-prototype",
+          current,
+          redactLiterals,
+        );
       }
 
       const symbols = Object.getOwnPropertySymbols(current).filter(
         (symbol) => Object.getOwnPropertyDescriptor(current, symbol)?.enumerable,
       );
       if (symbols.length > 0) {
-        unsupportedValue(unsupported, path, "symbol-key", current);
+        unsupportedValue(unsupported, path, "symbol-key", current, redactLiterals);
       }
 
       const keys = Object.keys(current);
       if (keys.length > maxCollectionEntries) {
-        return unsupportedValue(unsupported, path, "max-collection-entries", current);
+        return unsupportedValue(
+          unsupported,
+          path,
+          "max-collection-entries",
+          current,
+          redactLiterals,
+        );
       }
 
       ancestors.add(current);
@@ -166,26 +229,45 @@ export function serializeValue(value: unknown, options: SerializeOptions = {}): 
       }
 
       const entries: Array<[string, JsonValue]> = [];
+      const redactedKeys = new Set<string>();
       for (const key of keys) {
-        const childPath = pointer(path, key);
+        const persistedKey = replaceLiterals(key, redactLiterals);
+        if (redactedKeys.has(persistedKey)) {
+          throw new RedactedKeyCollisionError("redacted object keys collide");
+        }
+        redactedKeys.add(persistedKey);
+        const childPath = pointer(path, persistedKey);
         const descriptor = Object.getOwnPropertyDescriptor(current, key);
         if (!descriptor || descriptor.get || descriptor.set) {
           entries.push([
-            key,
-            unsupportedValue(unsupported, childPath, "accessor-property", current),
+            persistedKey,
+            unsupportedValue(
+              unsupported,
+              childPath,
+              "accessor-property",
+              current,
+              redactLiterals,
+            ),
           ]);
-        } else if (SENSITIVE_KEY.test(key)) {
-          entries.push([key, REDACTED]);
+        } else if (SENSITIVE_KEY.test(key) || SENSITIVE_KEY.test(persistedKey)) {
+          entries.push([persistedKey, REDACTED]);
         } else {
-          entries.push([key, visit(descriptor.value, childPath, depth + 1)]);
+          entries.push([persistedKey, visit(descriptor.value, childPath, depth + 1)]);
         }
       }
       ancestors.delete(current);
       entries.sort(([left], [right]) => left.localeCompare(right));
       return Object.fromEntries(entries);
-    } catch {
+    } catch (error) {
       ancestors.delete(current);
-      return unsupportedValue(unsupported, path, "serialization-trap", current);
+      if (error instanceof RedactedKeyCollisionError) throw error;
+      return unsupportedValue(
+        unsupported,
+        path,
+        "serialization-trap",
+        current,
+        redactLiterals,
+      );
     }
   };
 

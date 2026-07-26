@@ -33,6 +33,8 @@
         "dependency": "fixture",
         "exportPath": "parse",
         "callSiteFingerprint": "test.mjs:test",
+        "moduleKind": "esm",
+        "receiverKind": "none",
         "argsBefore": [
           "x"
         ],
@@ -50,6 +52,8 @@
         "dependency": "fixture",
         "exportPath": "parse",
         "callSiteFingerprint": "test.mjs:test",
+        "moduleKind": "esm",
+        "receiverKind": "none",
         "argsBefore": [
           "x"
         ],

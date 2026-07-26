@@ -85,13 +85,19 @@ function sort(value) {
 }
 
 const requireFromCheckout = createRequire(pathToFileURL(join(process.cwd(), "package.json")));
-const entry = requireFromCheckout.resolve(input.dependency);
-const dependencyModule = await import(pathToFileURL(entry).href);
+const dependencyModule = input.moduleKind === "commonjs"
+  ? requireFromCheckout(input.dependency)
+  : await import(pathToFileURL(requireFromCheckout.resolve(input.dependency)).href);
 const parts = input.exportPath.split(".");
-let target = parts.shift() === "default" ? dependencyModule.default : dependencyModule[input.exportPath.split(".")[0]];
-let receiver;
+const firstPart = parts.shift();
+let target = input.moduleKind === "commonjs" && firstPart === "default"
+  ? dependencyModule
+  : firstPart === "default"
+    ? dependencyModule.default
+    : dependencyModule[firstPart];
+let receiver = input.receiverKind === "parent" ? dependencyModule : undefined;
 for (const part of parts) {
-  receiver = target;
+  if (input.receiverKind === "parent") receiver = target;
   target = target[part];
 }
 const args = revive(input.argsBefore);
@@ -153,6 +159,10 @@ function reproducibleDifference(
     && (difference.candidate.unsupported?.length ?? 0) === 0
     && (difference.base.normalization?.length ?? 0) === 0
     && (difference.candidate.normalization?.length ?? 0) === 0
+    && difference.base.moduleKind !== undefined
+    && difference.base.receiverKind !== undefined
+    && difference.base.moduleKind === difference.candidate.moduleKind
+    && difference.base.receiverKind === difference.candidate.receiverKind
     && !containsUnsafeReplayValue(difference.base.argsBefore)
     && !containsUnsafeReplayValue(observationOutcome(difference.base))
     && !containsUnsafeReplayValue(observationOutcome(difference.candidate))
@@ -193,6 +203,8 @@ export async function generateReproduction(
     kind: "prooftape-reproduction-input",
     dependency: report.dependency,
     exportPath: difference.base.exportPath,
+    moduleKind: difference.base.moduleKind!,
+    receiverKind: difference.base.receiverKind!,
     argsBefore: difference.base.argsBefore,
     expectedBase: observationOutcome(difference.base),
     observedCandidate: observationOutcome(difference.candidate),

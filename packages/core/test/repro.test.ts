@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   parseReproductionManifest,
+  type CallObservationV1,
   type CapsuleV1,
 } from "@prooftape/schema";
 import { buildReport, generateReproduction } from "../src/index.js";
@@ -38,6 +39,8 @@ function capsule(value: string, version: string, commit: string): CapsuleV1 {
       dependency: "fixture",
       exportPath: "value",
       callSiteFingerprint: "test.mjs:run",
+      moduleKind: "esm",
+      receiverKind: "none",
       argsBefore: [2],
       argsAfter: [2],
       outcome: "return",
@@ -63,6 +66,22 @@ async function installedFixture(value: string): Promise<string> {
       : undefined;
   if (!source) throw new Error("unknown reproduction fixture value");
   await writeFile(join(dependency, "index.js"), source);
+  return directory;
+}
+
+async function installedCommonJsFixture(value: string): Promise<string> {
+  const directory = await mkdtemp(join(tmpdir(), "prooftape-repro-cjs-"));
+  const dependency = join(directory, "node_modules", "fixture");
+  await mkdir(dependency, { recursive: true });
+  await writeFile(join(directory, "package.json"), JSON.stringify({ type: "module" }));
+  await writeFile(
+    join(dependency, "package.json"),
+    JSON.stringify({ name: "fixture", version: "1.0.0", main: "./index.cjs" }),
+  );
+  await writeFile(
+    join(dependency, "index.cjs"),
+    `module.exports = { prefix: ${JSON.stringify(value)}, method(input) { return this.prefix + input; } };\n`,
+  );
   return directory;
 }
 
@@ -118,5 +137,44 @@ describe("generateReproduction", () => {
 
     await expect(generateReproduction(base, candidate, report, join(root, "repro")))
       .rejects.toThrow(/safe reproduction/);
+  });
+
+  it("replays CommonJS member calls with their original receiver", async () => {
+    const withInvocation = (
+      source: CapsuleV1,
+      value: string,
+    ): CapsuleV1 => ({
+      ...source,
+      calls: [{
+        ...source.calls[0]!,
+        exportPath: "method",
+        argsBefore: ["x"],
+        argsAfter: ["x"],
+        value,
+        moduleKind: "commonjs",
+        receiverKind: "parent",
+      } as unknown as CallObservationV1],
+    });
+    const base = withInvocation(capsule("beforex", "1.0.0", "a"), "beforex");
+    const candidate = withInvocation(capsule("afterx", "2.0.0", "e"), "afterx");
+    const report = buildReport(base, candidate);
+    const root = await mkdtemp(join(tmpdir(), "prooftape-repro-"));
+    const directory = join(root, "repro");
+    await generateReproduction(base, candidate, report, directory);
+    const baseEnvironment = await installedCommonJsFixture("before");
+    const candidateEnvironment = await installedCommonJsFixture("after");
+
+    const baseRun = spawnSync(process.execPath, [join(directory, "repro.mjs")], {
+      cwd: baseEnvironment,
+      encoding: "utf8",
+      windowsHide: true,
+    });
+    const candidateRun = spawnSync(process.execPath, [join(directory, "repro.mjs")], {
+      cwd: candidateEnvironment,
+      encoding: "utf8",
+      windowsHide: true,
+    });
+    expect(baseRun.status, baseRun.stderr).toBe(0);
+    expect(candidateRun.status, candidateRun.stderr).toBe(1);
   });
 });

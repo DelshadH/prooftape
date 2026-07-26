@@ -44,6 +44,34 @@ describe("serializeValue", () => {
     });
   });
 
+  it("redacts literals from keys, paths, and unsupported type labels", () => {
+    const canary = "pt-canary-8923";
+    const Named = class {};
+    Object.defineProperty(Named, "name", { value: `Type${canary}` });
+    const result = serializeValue({
+      [`prefix-${canary}`]: new Named(),
+    }, { redactLiterals: [canary] });
+
+    expect(JSON.stringify(result)).not.toContain(canary);
+    expect(result.value).toEqual({
+      "prefix-[REDACTED]": {
+        $prooftape: "unsupported",
+        reason: "unsupported-prototype",
+      },
+    });
+    expect(result.unsupported[0]).toMatchObject({
+      path: "/prefix-[REDACTED]",
+      type: "Type[REDACTED]",
+    });
+  });
+
+  it("rejects object-key collisions introduced by redaction", () => {
+    expect(() => serializeValue(
+      { "left-secret": 1, "left-[REDACTED]": 2 },
+      { redactLiterals: ["secret"] },
+    )).toThrow(/redacted object keys collide/);
+  });
+
   it("marks cycles and accessors unsupported without invoking getters", () => {
     let getterCalls = 0;
     const value: Record<string, unknown> = {};

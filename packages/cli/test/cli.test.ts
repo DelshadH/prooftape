@@ -33,6 +33,8 @@ function capsule(value: string, commit: string): CapsuleV1 {
       dependency: "fixture",
       exportPath: "value",
       callSiteFingerprint: "test.mjs:run",
+      moduleKind: "esm",
+      receiverKind: "none",
       argsBefore: [2],
       argsAfter: [2],
       outcome: "return",
@@ -137,6 +139,23 @@ describe("runCli", () => {
     expect(streams.read().stderr).toContain(
       "Observation authenticity is not established",
     );
+  });
+
+  it("maps empty capsule comparison to unsupported exit 4", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "prooftape-cli-"));
+    const empty = { ...capsule("same", "a"), calls: [] };
+    await writeFile(join(cwd, "base.ptape"), JSON.stringify(empty));
+    await writeFile(join(cwd, "candidate.ptape"), JSON.stringify(empty));
+    const streams = output();
+
+    expect(await runCli([
+      "diff",
+      "--baseline",
+      "base.ptape",
+      "--candidate",
+      "candidate.ptape",
+    ], { cwd, ...streams.io })).toBe(4);
+    expect(streams.read().stderr).toContain("empty capsules");
   });
 
   it("maps malformed and unsupported input to exit 4 without a stack trace", async () => {

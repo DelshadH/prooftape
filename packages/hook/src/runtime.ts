@@ -25,6 +25,9 @@ export interface ProofTapeRuntime {
     callable: (...args: never[]) => T,
     thisArgument: unknown,
     args: unknown[],
+    staticCallSiteFingerprint?: string,
+    moduleKind?: "esm" | "commonjs",
+    receiverKind?: "none" | "parent",
   ): T;
 }
 
@@ -48,6 +51,27 @@ function redactedString(value: string, options: SerializeOptions): string {
   return typeof serialized === "string" ? serialized : "[UNSUPPORTED]";
 }
 
+function dataProperty(
+  value: object,
+  key: string,
+): { readonly value?: unknown; readonly accessor: boolean } {
+  try {
+    let current: object | null = value;
+    while (current !== null) {
+      const descriptor = Object.getOwnPropertyDescriptor(current, key);
+      if (descriptor) {
+        return descriptor.get || descriptor.set
+          ? { accessor: true }
+          : { accessor: false, value: descriptor.value };
+      }
+      current = Object.getPrototypeOf(current);
+    }
+  } catch {
+    return { accessor: true };
+  }
+  return { accessor: false };
+}
+
 function serializeError(
   thrown: unknown,
   options: SerializeOptions,
@@ -64,30 +88,63 @@ function serializeError(
     };
   }
 
-  const fields: Record<string, JsonValue> = {};
+  const rawFields: Record<string, unknown> = {};
   const unsupported: UnsupportedObservation[] = [];
-  let code: JsonValue | undefined;
-  for (const key of Object.keys(thrown).sort()) {
+  let keys: string[];
+  try {
+    keys = Object.keys(thrown).sort();
+  } catch {
+    return {
+      error: { name: "Error", message: "[UNSUPPORTED]" },
+      unsupported: [{ path: "/error", reason: "serialization-trap", type: "error" }],
+    };
+  }
+  for (const key of keys) {
     if (key === "stack" || key === "message" || key === "name") continue;
     const descriptor = Object.getOwnPropertyDescriptor(thrown, key);
     if (!descriptor || descriptor.get || descriptor.set) {
-      fields[key] = { $prooftape: "unsupported", reason: "accessor-property" };
-      unsupported.push({ path: `/error/${key}`, reason: "accessor-property", type: "error" });
+      rawFields[key] = { $prooftape: "unsupported", reason: "accessor-property" };
+      const persistedKey = redactedString(key, options)
+        .replaceAll("~", "~0")
+        .replaceAll("/", "~1");
+      unsupported.push({
+        path: `/error/${persistedKey}`,
+        reason: "accessor-property",
+        type: "error",
+      });
       continue;
     }
-    const serialized = safeSerialize(descriptor.value, options);
-    unsupported.push(...serialized.unsupported.map((item) => ({
-      ...item,
-      path: `/error/${key}${item.path === "/" ? "" : item.path}`,
-    })));
-    if (key === "code") code = serialized.value;
-    else fields[key] = serialized.value;
+    rawFields[key] = descriptor.value;
+  }
+  const serializedFields = safeSerialize(rawFields, options);
+  unsupported.push(...serializedFields.unsupported.map((item) => ({
+    ...item,
+    path: `/error${item.path === "/" ? "" : item.path}`,
+  })));
+  const fields = (
+    serializedFields.value !== null
+    && typeof serializedFields.value === "object"
+    && !Array.isArray(serializedFields.value)
+  ) ? serializedFields.value as Record<string, JsonValue> : {};
+  const code = fields.code;
+  delete fields.code;
+  const name = dataProperty(thrown, "name");
+  const message = dataProperty(thrown, "message");
+  if (name.accessor) {
+    unsupported.push({ path: "/error/name", reason: "accessor-property", type: "error" });
+  }
+  if (message.accessor) {
+    unsupported.push({ path: "/error/message", reason: "accessor-property", type: "error" });
   }
 
   return {
     error: {
-      name: redactedString(thrown.name, options),
-      message: redactedString(thrown.message, options),
+      name: name.accessor
+        ? "[UNSUPPORTED]"
+        : redactedString(typeof name.value === "string" ? name.value : "Error", options),
+      message: message.accessor
+        ? "[UNSUPPORTED]"
+        : redactedString(typeof message.value === "string" ? message.value : "", options),
       ...(code !== undefined ? { code } : {}),
       ...(Object.keys(fields).length > 0 ? { fields } : {}),
     },
@@ -113,10 +170,6 @@ function defaultCallSiteFingerprint(): string {
     .replace(normalizedCwd, "<cwd>");
 }
 
-function isNativePromise(value: unknown): value is Promise<unknown> {
-  return value instanceof Promise && Object.getPrototypeOf(value) === Promise.prototype;
-}
-
 export function createRuntime(options: RuntimeOptions): ProofTapeRuntime {
   let sequence = 0;
   const serializationOptions: SerializeOptions = {
@@ -132,7 +185,11 @@ export function createRuntime(options: RuntimeOptions): ProofTapeRuntime {
     try {
       options.emit(call);
     } catch (error) {
-      options.onInternalError?.(error);
+      try {
+        options.onInternalError?.(error);
+      } catch {
+        // Observation failures must never replace application behavior.
+      }
     }
   };
 
@@ -143,14 +200,27 @@ export function createRuntime(options: RuntimeOptions): ProofTapeRuntime {
       callable: (...args: never[]) => T,
       thisArgument: unknown,
       args: unknown[],
+      staticCallSiteFingerprint?: string,
+      moduleKind?: "esm" | "commonjs",
+      receiverKind?: "none" | "parent",
     ): T {
       sequence += 1;
       const callSequence = sequence;
       const callId = `${options.processId}:${callSequence}`;
-      const callSiteFingerprint = (
-        options.callSiteFingerprint ?? defaultCallSiteFingerprint
-      )();
-      const started = process.hrtime.bigint();
+      let callSiteFingerprint = "unknown";
+      try {
+        callSiteFingerprint = staticCallSiteFingerprint ?? (
+          options.callSiteFingerprint ?? defaultCallSiteFingerprint
+        )();
+      } catch {
+        // A hostile stack hook cannot be allowed to replace the application call.
+      }
+      let started = 0n;
+      try {
+        started = process.hrtime.bigint();
+      } catch {
+        // Duration is diagnostic raw evidence and is discarded from the capsule.
+      }
       const argsBefore = safeSerialize(args, serializationOptions);
 
       const finish = (
@@ -167,13 +237,21 @@ export function createRuntime(options: RuntimeOptions): ProofTapeRuntime {
           callId,
           sequence: callSequence,
           processId: options.processId,
-          dependency,
-          exportPath,
-          callSiteFingerprint,
+          dependency: redactedString(dependency, serializationOptions),
+          exportPath: redactedString(exportPath, serializationOptions),
+          callSiteFingerprint: redactedString(callSiteFingerprint, serializationOptions),
+          ...(moduleKind === undefined ? {} : { moduleKind }),
+          ...(receiverKind === undefined ? {} : { receiverKind }),
           argsBefore: argsBefore.value,
           argsAfter: argsAfter.value,
           outcome,
-          durationNanoseconds: (process.hrtime.bigint() - started).toString(10),
+          durationNanoseconds: (() => {
+            try {
+              return (process.hrtime.bigint() - started).toString(10);
+            } catch {
+              return "0";
+            }
+          })(),
         };
 
         if (outcome === "throw" || outcome === "reject") {
@@ -200,22 +278,18 @@ export function createRuntime(options: RuntimeOptions): ProofTapeRuntime {
       try {
         result = Reflect.apply(callable, thisArgument, args) as T;
       } catch (error) {
-        finish("throw", { thrown: error });
+        try {
+          finish("throw", { thrown: error });
+        } catch {
+          // Capture finalization is failure-contained.
+        }
         throw error;
       }
 
-      if (isNativePromise(result)) {
-        void Promise.prototype.then.call(
-          result,
-          (value: unknown) => {
-            finish("resolve", { value });
-          },
-          (error: unknown) => {
-            finish("reject", { thrown: error });
-          },
-        );
-      } else {
+      try {
         finish("return", { value: result });
+      } catch {
+        // Capture finalization is failure-contained.
       }
       return result;
     },

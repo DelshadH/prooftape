@@ -20,8 +20,8 @@ for (const name of ["PROOFTAPE_BASE_REF", "PROOFTAPE_CANDIDATE_REF"]) {
   }
 }
 const dependency = required("PROOFTAPE_DEPENDENCY", 256);
-if (!/^(?:@[a-z0-9][a-z0-9._~-]*\/)?[a-z0-9][a-z0-9._~-]*$/u.test(dependency)) {
-  throw new Error("PROOFTAPE_DEPENDENCY must be an exact npm package name");
+if (!/^(?:@[a-z0-9][a-z0-9._~-]*\/)?[a-z0-9][a-z0-9._~-]*(?:\/[a-z0-9][a-z0-9._~-]*)*$/u.test(dependency)) {
+  throw new Error("PROOFTAPE_DEPENDENCY must be an exact npm package name with an optional subpath");
 }
 parseCommand(required("PROOFTAPE_COMMAND", 16_384));
 process.stdout.write("Workflow inputs are bounded direct-execution values.\n");
