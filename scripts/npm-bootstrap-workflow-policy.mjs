@@ -29,6 +29,10 @@ export function auditNpmBootstrapWorkflow(text, version) {
     events.length === 1
     && events[0] === "workflow_dispatch"
   );
+  const serialized = (
+    /^concurrency:\s*\r?\n {2}group:\s*prooftape-npm-bootstrap-v0\.1\.0-alpha\.1\s*\r?\n {2}cancel-in-progress:\s*false\s*$/mu
+      .test(text)
+  );
   const tagIsExact = (
     text.includes(`RELEASE_VERSION: ${JSON.stringify(version)}`)
     && text.includes(`default: ${exactTag}`)
@@ -49,7 +53,8 @@ export function auditNpmBootstrapWorkflow(text, version) {
     )
   );
   const prepareBlock = /^  prepare:\s*\r?\n([\s\S]*?)^  publish:/mu.exec(text)?.[1] ?? "";
-  const publishBlock = /^  publish:\s*\r?\n([\s\S]*)$/mu.exec(text)?.[1] ?? "";
+  const publishBlock = /^  publish:\s*\r?\n([\s\S]*?)^  release:/mu.exec(text)?.[1] ?? "";
+  const releaseBlock = /^  release:\s*\r?\n([\s\S]*)$/mu.exec(text)?.[1] ?? "";
   const environmentMatch = /^ {4}environment:\s*(\S+)\s*$/mu.exec(publishBlock);
   const protectedEnvironment = environmentMatch?.[1] ?? "";
   const leastPrivilegePermissions = (
@@ -61,10 +66,12 @@ export function auditNpmBootstrapWorkflow(text, version) {
       6,
       ["contents:read", "id-token:write"],
     )
+    && hasExactPermissions(releaseBlock, 4, 6, ["contents:write"])
   );
   const oidcIsolatedToPublish = (
     !/\bid-token:\s*write\b/u.test(text.slice(0, text.indexOf("  publish:")))
     && (publishBlock.match(/\bid-token:\s*write\b/gu)?.length ?? 0) === 1
+    && !/\bid-token:\s*write\b/u.test(releaseBlock)
   );
   const secretReference = "NODE_AUTH_TOKEN: ${{ secrets.NPM_BOOTSTRAP_TOKEN }}";
   const tokenIsolatedToPublishStep = (
@@ -72,6 +79,36 @@ export function auditNpmBootstrapWorkflow(text, version) {
     && (text.match(/\$\{\{\s*secrets\./gu)?.length ?? 0) === 1
     && (text.match(/NODE_AUTH_TOKEN:/gu)?.length ?? 0) === 1
     && publishBlock.includes(secretReference)
+  );
+  const publishIdentityMarker = "Revalidate publish-job workflow, checkout, and tag identity";
+  const publishIdentityPosition = publishBlock.indexOf(publishIdentityMarker);
+  const secretPosition = publishBlock.indexOf(secretReference);
+  const publishIdentityRechecked = (
+    publishIdentityPosition >= 0
+    && publishIdentityPosition < secretPosition
+    && publishBlock.includes(
+      'test "${PROOFTAPE_WORKFLOW_SHA}" = "${PROOFTAPE_EXPECTED_COMMIT}"',
+    )
+    && publishBlock.includes(
+      'test "$(git rev-parse HEAD)" = "${PROOFTAPE_EXPECTED_COMMIT}"',
+    )
+    && publishBlock.includes(
+      'test "$(git rev-list -n 1 "${PROOFTAPE_RELEASE_TAG}")" = "${PROOFTAPE_EXPECTED_COMMIT}"',
+    )
+  );
+  const setupNodeBlocks = [
+    ...text.matchAll(
+      /uses:\s*actions\/setup-node@[a-f0-9]{40}[\s\S]*?(?=\n\s*-\s+name:|\n\s*-\s+uses:|\n {2}[a-z-]+:|\s*$)/gu,
+    ),
+  ].map((match) => match[0]);
+  const pinnedToolchain = (
+    text.includes('NPM_VERSION: "11.16.0"')
+    && setupNodeBlocks.length >= 2
+    && setupNodeBlocks.every((block) => block.includes('node-version: "24.18.0"'))
+    && (text.match(/npm install --global "npm@\$\{NPM_VERSION\}"/gu)?.length ?? 0)
+      === setupNodeBlocks.length
+    && (text.match(/test "\$\(npm --version\)" = "\$\{NPM_VERSION\}"/gu)?.length ?? 0)
+      === setupNodeBlocks.length
   );
   const explicitPublishApproval = (
     text.includes("publish:")
@@ -159,7 +196,8 @@ export function auditNpmBootstrapWorkflow(text, version) {
   const tokenNotRetained = (
     publishBlock.includes("set +x")
     && !publishBlock.includes("set -x")
-    && (text.match(/package-manager-cache:\s*false/gu)?.length ?? 0) === 2
+    && (text.match(/package-manager-cache:\s*false/gu)?.length ?? 0)
+      === setupNodeBlocks.length
     && !/actions\/cache@/u.test(text)
     && !/^\s+path:\s*.*(?:NODE_AUTH_TOKEN|NPM_BOOTSTRAP_TOKEN|\.npmrc|\$HOME)/gmu
       .test(text)
@@ -181,9 +219,66 @@ export function auditNpmBootstrapWorkflow(text, version) {
     && publishBlock.includes("npm-bootstrap-incident.json")
     && publishBlock.includes('--failed-phase "${failed_phase}"')
     && publishBlock.includes("trap finish_authenticated_step EXIT")
-    && publishBlock.includes("if: ${{ failure() }}")
+    && publishBlock.includes(
+      "if: ${{ failure() && steps.authenticated_publish.outcome == 'failure' }}",
+    )
     && /name:\s*prooftape-0\.1\.0-alpha\.1-npm-bootstrap-incident[\s\S]*?path:\s*\.evidence\/npm-bootstrap-incident\.json\s*\r?\n\s*if-no-files-found:\s*error/u
       .test(publishBlock)
+  );
+  const postPublicationIncidentHandling = (
+    publishBlock.includes("--failed-phase postpublish-verification")
+    && publishBlock.includes(
+      '--verification-stage "${stage}"',
+    )
+    && publishBlock.includes(
+      '--attempted "@prooftape/schema,@prooftape/core,@prooftape/hook,prooftape"',
+    )
+    && publishBlock.includes("--revocation-succeeded true")
+    && publishBlock.includes(
+      "steps.postpublish_incident.outcome == 'success'",
+    )
+    && releaseBlock.includes("--failed-phase postpublish-verification")
+    && releaseBlock.includes(
+      "--verification-stage github-release-creation",
+    )
+    && /id:\s*github_release_incident\s*\r?\n\s*if:\s*\$\{\{\s*failure\(\)\s*\}\}/u
+      .test(releaseBlock)
+    && releaseBlock.includes(
+      "steps.github_release_incident.outcome == 'success'",
+    )
+  );
+  const fiveMinutePropagationWindow = (
+    text.includes('POSTPUBLISH_MAX_ATTEMPTS: "31"')
+    && text.includes('POSTPUBLISH_RETRY_DELAY_MS: "10000"')
+    && publishBlock.includes(
+      '--max-attempts "${POSTPUBLISH_MAX_ATTEMPTS}"',
+    )
+    && publishBlock.includes(
+      '--retry-delay-ms "${POSTPUBLISH_RETRY_DELAY_MS}"',
+    )
+  );
+  const githubPrereleaseAfterVerification = (
+    /^ {4}needs:\s*publish\s*$/mu.test(releaseBlock)
+    && releaseBlock.indexOf("Reverify downloaded receipt and release assets")
+      < releaseBlock.indexOf("gh release create")
+    && releaseBlock.includes(
+      "(cd .evidence/release && sha256sum --check SHA256SUMS)",
+    )
+    && releaseBlock.includes(
+      'receipt.kind !== "prooftape-npm-bootstrap-publication-verification"',
+    )
+    && releaseBlock.includes(
+      "receipt.expectedCommit !== process.env.PROOFTAPE_EXPECTED_COMMIT",
+    )
+    && releaseBlock.includes("receipt.authenticationPresent !== false")
+    && releaseBlock.includes("receipt.passed !== true")
+    && releaseBlock.includes("gh release create")
+    && releaseBlock.includes("--verify-tag")
+    && releaseBlock.includes("--prerelease")
+    && releaseBlock.includes(
+      "prooftape-0.1.0-alpha.1-npm-publication-verification",
+    )
+    && !publishBlock.includes("gh release create")
   );
   const nonRerunnable = (
     registryAbsencePreflight
@@ -191,6 +286,9 @@ export function auditNpmBootstrapWorkflow(text, version) {
   );
   const failures = [];
   if (!manualDispatch) failures.push("bootstrap must use only workflow_dispatch");
+  if (!serialized) {
+    failures.push("bootstrap dispatches must use the immutable non-canceling concurrency group");
+  }
   if (!tagIsExact) failures.push(`bootstrap must validate and check out exact tag ${exactTag}`);
   if (!expectedCommitBound) {
     failures.push("bootstrap tag, checkout, and workflow SHA must equal the expected commit");
@@ -207,6 +305,12 @@ export function auditNpmBootstrapWorkflow(text, version) {
   }
   if (!tokenIsolatedToPublishStep) {
     failures.push("the bootstrap token must appear only in one protected publish step");
+  }
+  if (!publishIdentityRechecked) {
+    failures.push("bootstrap publish job must independently revalidate workflow, checkout, and tag identity");
+  }
+  if (!pinnedToolchain) {
+    failures.push("bootstrap jobs must pin Node 24.18.0 and npm 11.16.0 exactly");
   }
   if (!explicitPublishApproval) {
     failures.push("bootstrap publication requires explicit one-time-token approval inputs");
@@ -241,6 +345,15 @@ export function auditNpmBootstrapWorkflow(text, version) {
   if (!incidentHandling) {
     failures.push("bootstrap must preserve partial-publication incidents");
   }
+  if (!postPublicationIncidentHandling) {
+    failures.push("bootstrap must preserve incidents after irreversible publication");
+  }
+  if (!fiveMinutePropagationWindow) {
+    failures.push("bootstrap must use the finite five-minute registry propagation window");
+  }
+  if (!githubPrereleaseAfterVerification) {
+    failures.push("GitHub prerelease creation must follow successful npm verification");
+  }
   if (!nonRerunnable) {
     failures.push("bootstrap must fail closed once any package exists");
   }
@@ -249,6 +362,7 @@ export function auditNpmBootstrapWorkflow(text, version) {
       path: BOOTSTRAP_WORKFLOW_PATH,
       version,
       manualDispatch,
+      serialized,
       exactTag: tagIsExact ? exactTag : "",
       expectedCommitBound,
       tagOnMain,
@@ -256,6 +370,8 @@ export function auditNpmBootstrapWorkflow(text, version) {
       leastPrivilegePermissions,
       oidcIsolatedToPublish,
       tokenIsolatedToPublishStep,
+      publishIdentityRechecked,
+      pinnedToolchain,
       explicitPublishApproval,
       actionsPinned,
       fullGates,
@@ -269,6 +385,9 @@ export function auditNpmBootstrapWorkflow(text, version) {
       cryptographicProvenanceVerification,
       registryIdentityVerification,
       incidentHandling,
+      postPublicationIncidentHandling,
+      fiveMinutePropagationWindow,
+      githubPrereleaseAfterVerification,
       nonRerunnable,
       passed: failures.length === 0,
     },

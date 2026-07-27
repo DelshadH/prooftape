@@ -90,7 +90,11 @@ for (const file of trackedFiles()) {
         normalizedFile === ".github/workflows/npm-bootstrap.yml"
         && scope === "id-token"
       );
-      if (!releaseOidc && !bootstrapOidc) {
+      const bootstrapReleaseContents = (
+        normalizedFile === ".github/workflows/npm-bootstrap.yml"
+        && scope === "contents"
+      );
+      if (!releaseOidc && !bootstrapOidc && !bootstrapReleaseContents) {
         failures.push(`${file}: ${scope}: write permission is forbidden`);
       }
     }

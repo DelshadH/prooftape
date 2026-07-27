@@ -28,6 +28,13 @@ permissions:
 
 env:
   RELEASE_VERSION: "0.1.0-alpha.1"
+  NPM_VERSION: "11.16.0"
+  POSTPUBLISH_MAX_ATTEMPTS: "31"
+  POSTPUBLISH_RETRY_DELAY_MS: "10000"
+
+concurrency:
+  group: prooftape-npm-bootstrap-v0.1.0-alpha.1
+  cancel-in-progress: false
 
 jobs:
   prepare:
@@ -80,22 +87,12 @@ jobs:
       - name: Set up Node without a registry credential
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: "24.18.0"
           package-manager-cache: false
-      - name: Require npm 11.5.1 or newer
+      - name: Install and verify the exact npm release
         run: |
-          node -e '
-            const actual = process.argv[1].split(".").map(Number);
-            const minimum = process.argv[2].split(".").map(Number);
-            const acceptable = actual.some((part, index) =>
-              part > minimum[index] && actual.slice(0, index).every(
-                (prefix, prefixIndex) => prefix === minimum[prefixIndex]
-              )
-            ) || actual.every((part, index) => part === minimum[index]);
-            if (!acceptable) {
-              throw new Error(`npm ${process.argv[2]} or newer is required; found ${process.argv[1]}`);
-            }
-          ' "$(npm --version)" "11.5.1"
+          npm install --global "npm@${NPM_VERSION}"
+          test "$(npm --version)" = "${NPM_VERSION}"
       - name: Install the exact lockfile without lifecycle scripts
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Run typecheck and all tests
@@ -156,12 +153,25 @@ jobs:
           ref: ${{ inputs.tag }}
           fetch-depth: 0
           persist-credentials: false
+      - name: Revalidate publish-job workflow, checkout, and tag identity
+        env:
+          PROOFTAPE_RELEASE_TAG: ${{ inputs.tag }}
+          PROOFTAPE_EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          PROOFTAPE_WORKFLOW_SHA: ${{ github.sha }}
+        run: |
+          test "${PROOFTAPE_WORKFLOW_SHA}" = "${PROOFTAPE_EXPECTED_COMMIT}"
+          test "$(git rev-parse HEAD)" = "${PROOFTAPE_EXPECTED_COMMIT}"
+          test "$(git rev-list -n 1 "${PROOFTAPE_RELEASE_TAG}")" = "${PROOFTAPE_EXPECTED_COMMIT}"
       - name: Set up Node and the npm registry
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: "24.18.0"
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
+      - name: Install and verify the exact npm release
+        run: |
+          npm install --global "npm@${NPM_VERSION}"
+          test "$(npm --version)" = "${NPM_VERSION}"
       - name: Download the same-run reviewed evidence
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -177,6 +187,7 @@ jobs:
             --out .evidence/npm-bootstrap-publish-preflight.json \
             --replace
       - name: Publish reviewed packages and immediately revoke the token
+        id: authenticated_publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_BOOTSTRAP_TOKEN }}
           PROOFTAPE_EXPECTED_COMMIT: ${{ inputs.expected_commit }}
@@ -240,12 +251,15 @@ jobs:
           publish_one "@prooftape/hook" ".evidence/release/prooftape-hook-0.1.0-alpha.1.tgz"
           publish_one "prooftape" ".evidence/release/prooftape-0.1.0-alpha.1.tgz"
       - name: Verify registry bytes, metadata, alpha tag, and provenance identity
+        id: postpublish_verification
         env:
           PROOFTAPE_EXPECTED_COMMIT: ${{ inputs.expected_commit }}
         run: |
           node scripts/npm-bootstrap-verify.mjs postpublish \
             --dir .evidence/release \
             --commit "${PROOFTAPE_EXPECTED_COMMIT}" \
+            --max-attempts "${POSTPUBLISH_MAX_ATTEMPTS}" \
+            --retry-delay-ms "${POSTPUBLISH_RETRY_DELAY_MS}" \
             --out .evidence/npm-bootstrap-publication-verification.json \
             --replace
           mkdir -p .evidence/npm-signature-audit
@@ -258,6 +272,7 @@ jobs:
             "prooftape@0.1.0-alpha.1"
           npm audit signatures
       - name: Upload registry verification
+        id: publication_verification_artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: prooftape-0.1.0-alpha.1-npm-publication-verification
@@ -265,11 +280,145 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
           retention-days: 30
+      - name: Confirm authenticated publication incident evidence
+        id: authenticated_incident
+        if: ${{ failure() && steps.authenticated_publish.outcome == 'failure' }}
+        run: test -f .evidence/npm-bootstrap-incident.json
+      - name: Record post-publication verification incident
+        id: postpublish_incident
+        if: ${{ failure() && steps.authenticated_publish.outcome == 'success' }}
+        env:
+          PROOFTAPE_EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          PROOFTAPE_VERIFICATION_OUTCOME: ${{ steps.postpublish_verification.outcome }}
+        run: |
+          stage="verification-artifact-upload"
+          if [[ "${PROOFTAPE_VERIFICATION_OUTCOME}" != "success" ]]; then
+            stage="registry-provenance-signatures"
+          fi
+          node scripts/npm-bootstrap-verify.mjs incident \
+            --commit "${PROOFTAPE_EXPECTED_COMMIT}" \
+            --failed-phase postpublish-verification \
+            --verification-stage "${stage}" \
+            --attempted "@prooftape/schema,@prooftape/core,@prooftape/hook,prooftape" \
+            --revocation-attempted true \
+            --revocation-succeeded true \
+            --out .evidence/npm-bootstrap-incident.json \
+            --replace
       - name: Preserve publication incident evidence
-        if: ${{ failure() }}
+        if: >-
+          ${{
+            always()
+            && (
+              steps.authenticated_incident.outcome == 'success'
+              || steps.postpublish_incident.outcome == 'success'
+            )
+          }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: prooftape-0.1.0-alpha.1-npm-bootstrap-incident
+          path: .evidence/npm-bootstrap-incident.json
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 90
+
+  release:
+    name: Create verified GitHub prerelease
+    needs: publish
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out the exact reviewed tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Revalidate release-job workflow, checkout, and tag identity
+        env:
+          PROOFTAPE_RELEASE_TAG: ${{ inputs.tag }}
+          PROOFTAPE_EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          PROOFTAPE_WORKFLOW_SHA: ${{ github.sha }}
+        run: |
+          test "${PROOFTAPE_WORKFLOW_SHA}" = "${PROOFTAPE_EXPECTED_COMMIT}"
+          test "$(git rev-parse HEAD)" = "${PROOFTAPE_EXPECTED_COMMIT}"
+          test "$(git rev-list -n 1 "${PROOFTAPE_RELEASE_TAG}")" = "${PROOFTAPE_EXPECTED_COMMIT}"
+      - name: Set up the exact release Node version
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24.18.0"
+          package-manager-cache: false
+      - name: Install and verify the exact npm release
+        run: |
+          npm install --global "npm@${NPM_VERSION}"
+          test "$(npm --version)" = "${NPM_VERSION}"
+      - name: Download the same-run reviewed evidence
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: prooftape-0.1.0-alpha.1-npm-bootstrap-evidence
+          path: .evidence
+      - name: Download verified registry and provenance evidence
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: prooftape-0.1.0-alpha.1-npm-publication-verification
+          path: .evidence
+      - name: Reverify downloaded receipt and release assets
+        env:
+          PROOFTAPE_EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+        run: |
+          (cd .evidence/release && sha256sum --check SHA256SUMS)
+          node --input-type=module <<'NODE'
+          import { readFile } from "node:fs/promises";
+          const receipt = JSON.parse(
+            await readFile(
+              ".evidence/npm-bootstrap-publication-verification.json",
+              "utf8",
+            ),
+          );
+          if (
+            receipt.kind !== "prooftape-npm-bootstrap-publication-verification"
+            || receipt.version !== process.env.RELEASE_VERSION
+            || receipt.expectedCommit !== process.env.PROOFTAPE_EXPECTED_COMMIT
+            || receipt.authenticationPresent !== false
+            || receipt.passed !== true
+          ) {
+            throw new Error("publication verification receipt identity mismatch");
+          }
+          NODE
+      - name: Create the GitHub prerelease after npm verification
+        id: github_release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PROOFTAPE_RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          gh release create "${PROOFTAPE_RELEASE_TAG}" \
+            --verify-tag \
+            --prerelease \
+            --title "ProofTape ${RELEASE_VERSION}" \
+            --notes-file docs/release-notes-0.1.0-alpha.1.md \
+            .evidence/release/* \
+            .evidence/npm-bootstrap-publication-verification.json
+      - name: Record GitHub prerelease creation incident
+        id: github_release_incident
+        if: ${{ failure() }}
+        env:
+          PROOFTAPE_EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+        run: |
+          node scripts/npm-bootstrap-verify.mjs incident \
+            --commit "${PROOFTAPE_EXPECTED_COMMIT}" \
+            --failed-phase postpublish-verification \
+            --verification-stage github-release-creation \
+            --attempted "@prooftape/schema,@prooftape/core,@prooftape/hook,prooftape" \
+            --revocation-attempted true \
+            --revocation-succeeded true \
+            --out .evidence/npm-bootstrap-incident.json \
+            --replace
+      - name: Preserve GitHub prerelease incident evidence
+        if: ${{ always() && steps.github_release_incident.outcome == 'success' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: prooftape-0.1.0-alpha.1-github-release-incident
           path: .evidence/npm-bootstrap-incident.json
           if-no-files-found: error
           include-hidden-files: true

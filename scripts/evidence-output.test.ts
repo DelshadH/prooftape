@@ -69,6 +69,29 @@ describe("quality-gate evidence output", () => {
     }
   });
 
+  it("can persist an exact-main token-free npm bootstrap preflight", async () => {
+    const workflow = await readFile(
+      resolve(repository, ".github/workflows/ci.yml"),
+      "utf8",
+    );
+    expect(workflow).toContain("workflow_dispatch:");
+    expect(workflow).toContain("npm_bootstrap_preflight:");
+    expect(workflow).toContain('node-version: "24.18.0"');
+    expect(workflow).toContain('npm install --global "npm@11.16.0"');
+    expect(workflow).toContain(
+      "node scripts/npm-bootstrap-verify.mjs preflight",
+    );
+    expect(workflow).toContain(
+      "--commit \"${{ github.event.pull_request.head.sha || github.sha }}\"",
+    );
+    expect(workflow).toContain(
+      "name: prooftape-0.1.0-alpha.1-npm-bootstrap-preflight-${{ github.sha }}",
+    );
+    expect(workflow).toContain(
+      "path: |\n            .evidence/release\n            .evidence/npm-bootstrap-preflight.json",
+    );
+  });
+
   it("requires a protected tokenless OIDC release workflow", async () => {
     const result = runAudit(output, true);
     expect(result.status, result.stderr).toBe(0);
