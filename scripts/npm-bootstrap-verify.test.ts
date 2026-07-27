@@ -353,29 +353,42 @@ describe("npm bootstrap evidence verifier", () => {
     });
   });
 
-  it("records authentication and token-revocation failures without inventing a package", () => {
-    for (const failedPhase of ["authentication", "token-revocation"]) {
-      const report = buildPublicationIncident({
-        expectedCommit: commit,
-        failedPhase,
-        attemptedPackages: [],
-        revocationAttempted: true,
-        revocationSucceeded: failedPhase !== "token-revocation",
-        registryStates: RELEASE_PACKAGES.map((entry) => ({
-          name: entry.name,
-          versionExists: false,
-          lookup: "known",
-        })),
-      });
+  it("distinguishes retryable authentication from irreversible token-revocation failure", () => {
+    const absentRegistry = RELEASE_PACKAGES.map((entry) => ({
+      name: entry.name,
+      versionExists: false,
+      lookup: "known",
+    }));
+    expect(buildPublicationIncident({
+      expectedCommit: commit,
+      failedPhase: "authentication",
+      attemptedPackages: [],
+      revocationAttempted: true,
+      revocationSucceeded: true,
+      registryStates: absentRegistry,
+    })).toMatchObject({
+      kind: "prooftape-npm-bootstrap-incident",
+      failedPhase: "authentication",
+      failedPackage: null,
+      partialPublication: false,
+      rerunAllowed: true,
+    });
 
-      expect(report).toMatchObject({
-        kind: "prooftape-npm-bootstrap-incident",
-        failedPhase,
-        failedPackage: null,
-        partialPublication: false,
-        rerunAllowed: true,
-      });
-    }
+    expect(buildPublicationIncident({
+      expectedCommit: commit,
+      failedPhase: "token-revocation",
+      attemptedPackages: RELEASE_PACKAGES.map((entry) => entry.name),
+      revocationAttempted: true,
+      revocationSucceeded: false,
+      registryStates: absentRegistry,
+    })).toMatchObject({
+      kind: "prooftape-npm-bootstrap-incident",
+      failedPhase: "token-revocation",
+      failedPackage: null,
+      partialPublication: false,
+      publicationState: "not-observed",
+      rerunAllowed: false,
+    });
   });
 
   it("preserves unknown registry state when incident enrichment is unavailable", async () => {
@@ -450,5 +463,32 @@ describe("npm bootstrap evidence verifier", () => {
     expect(result).toEqual([{ passed: true }]);
     expect(verificationAttempts).toBe(3);
     expect(waits).toEqual([10_000, 10_000]);
+  });
+
+  it("includes registry request time inside the absolute five-minute deadline", async () => {
+    let nowMilliseconds = 0;
+    let verificationAttempts = 0;
+    const waits: number[] = [];
+
+    await expect(verifyPublishedRegistryWithRetry(commit, {
+      maximumAttempts: 31,
+      maximumDurationMilliseconds: 300_000,
+      retryDelayMilliseconds: 10_000,
+      now: () => nowMilliseconds,
+      verify: async () => {
+        verificationAttempts += 1;
+        nowMilliseconds += 15_000;
+        throw new Error("not propagated");
+      },
+      wait: async (milliseconds) => {
+        waits.push(milliseconds);
+        nowMilliseconds += milliseconds;
+      },
+    })).rejects.toThrow("five-minute deadline");
+
+    expect(nowMilliseconds).toBeLessThanOrEqual(300_000);
+    expect(verificationAttempts).toBeLessThan(31);
+    expect(waits.reduce((total, milliseconds) => total + milliseconds, 0))
+      .toBeLessThan(300_000);
   });
 });

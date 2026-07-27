@@ -30,6 +30,7 @@ env:
   RELEASE_VERSION: "0.1.0-alpha.1"
   NPM_VERSION: "11.16.0"
   POSTPUBLISH_MAX_ATTEMPTS: "31"
+  POSTPUBLISH_MAX_DURATION_MS: "300000"
   POSTPUBLISH_RETRY_DELAY_MS: "10000"
 
 concurrency:
@@ -259,6 +260,7 @@ jobs:
             --dir .evidence/release \
             --commit "${PROOFTAPE_EXPECTED_COMMIT}" \
             --max-attempts "${POSTPUBLISH_MAX_ATTEMPTS}" \
+            --max-duration-ms "${POSTPUBLISH_MAX_DURATION_MS}" \
             --retry-delay-ms "${POSTPUBLISH_RETRY_DELAY_MS}" \
             --out .evidence/npm-bootstrap-publication-verification.json \
             --replace

@@ -467,6 +467,11 @@ export function buildPublicationIncident({
     || !Array.isArray(attemptedPackages)
     || attemptedPackages.some((name) => !expectedNames.includes(name))
     || new Set(attemptedPackages).size !== attemptedPackages.length
+    || (failedPhase === "authentication" && attemptedPackages.length !== 0)
+    || (
+      failedPhase === "token-revocation"
+      && JSON.stringify(attemptedPackages) !== JSON.stringify(expectedNames)
+    )
     || (
       postPublishFailure
       && JSON.stringify(attemptedPackages) !== JSON.stringify(expectedNames)
@@ -500,8 +505,10 @@ export function buildPublicationIncident({
         ? "partial"
         : "not-observed";
   const partialPublication = publicationState === "partial";
+  const publicationAttempted = attemptedPackages.length > 0;
   const releaseIncident = (
     postPublishFailure
+    || publicationAttempted
     || publishedPackages.length > 0
     || registryStateUnknown
   );
@@ -516,6 +523,7 @@ export function buildPublicationIncident({
     publicationState,
     rerunAllowed: (
       !postPublishFailure
+      && !publicationAttempted
       && publishedPackages.length === 0
       && !registryStateUnknown
     ),
@@ -545,11 +553,23 @@ async function boundedResponse(response, label, maximumBytes = 2 * 1024 * 1024) 
   return bytes;
 }
 
-async function fetchJson(url, label, fetchImplementation = fetch) {
+function registryRequestSignal(deadlineSignal) {
+  const requestTimeout = AbortSignal.timeout(15_000);
+  return deadlineSignal
+    ? AbortSignal.any([deadlineSignal, requestTimeout])
+    : requestTimeout;
+}
+
+async function fetchJson(
+  url,
+  label,
+  fetchImplementation = fetch,
+  deadlineSignal,
+) {
   const response = await fetchImplementation(url, {
     headers: { accept: "application/json" },
     redirect: "error",
-    signal: AbortSignal.timeout(15_000),
+    signal: registryRequestSignal(deadlineSignal),
   });
   if (!response.ok) {
     throw new Error(`${label}: registry request failed with HTTP ${response.status}`);
@@ -636,6 +656,7 @@ export async function queryRegistryStates(fetchImplementation = fetch) {
 export async function verifyPublishedRegistry(
   expectedCommit,
   fetchImplementation = fetch,
+  deadlineSignal,
 ) {
   const results = [];
   for (const entry of RELEASE_PACKAGES) {
@@ -645,6 +666,7 @@ export async function verifyPublishedRegistry(
       packumentUrl,
       `${entry.name} packument`,
       fetchImplementation,
+      deadlineSignal,
     );
     const metadata = packument?.versions?.[entry.version];
     const tarballUrl = metadata?.dist?.tarball;
@@ -654,7 +676,7 @@ export async function verifyPublishedRegistry(
     }
     const tarballResponse = await fetchImplementation(tarballUrl, {
       redirect: "error",
-      signal: AbortSignal.timeout(15_000),
+      signal: registryRequestSignal(deadlineSignal),
     });
     if (!tarballResponse.ok) {
       throw new Error(`${entry.name}: tarball download failed`);
@@ -668,6 +690,7 @@ export async function verifyPublishedRegistry(
       attestationUrl,
       `${entry.name} attestations`,
       fetchImplementation,
+      deadlineSignal,
     );
     results.push(validatePublishedPackage(
       entry,
@@ -684,31 +707,52 @@ export async function verifyPublishedRegistryWithRetry(
   expectedCommit,
   {
     maximumAttempts = 31,
+    maximumDurationMilliseconds = 300_000,
     retryDelayMilliseconds = 10_000,
-    verify = verifyPublishedRegistry,
+    verify = (commit, { signal }) =>
+      verifyPublishedRegistry(commit, fetch, signal),
     wait = (milliseconds) => new Promise(
       (resolveDelay) => setTimeout(resolveDelay, milliseconds),
     ),
+    now = Date.now,
   } = {},
 ) {
   if (
     !Number.isSafeInteger(maximumAttempts)
     || maximumAttempts < 1
     || maximumAttempts > 31
+    || !Number.isSafeInteger(maximumDurationMilliseconds)
+    || maximumDurationMilliseconds < 1
+    || maximumDurationMilliseconds > 300_000
     || !Number.isSafeInteger(retryDelayMilliseconds)
     || retryDelayMilliseconds < 0
     || retryDelayMilliseconds > 10_000
+    || typeof now !== "function"
   ) {
     throw new Error("invalid bounded post-publication retry configuration");
   }
+  const deadline = now() + maximumDurationMilliseconds;
+  const deadlineError = () => new Error(
+    "registry and provenance verification exceeded the absolute five-minute deadline",
+  );
   let lastError;
   for (let attempt = 1; attempt <= maximumAttempts; attempt += 1) {
+    const remaining = deadline - now();
+    if (remaining <= 0) throw deadlineError();
+    const signal = AbortSignal.timeout(Math.max(1, remaining));
     try {
-      return await verify(expectedCommit);
+      return await verify(expectedCommit, { signal });
     } catch (error) {
       lastError = error;
+      if (signal.aborted || now() >= deadline) throw deadlineError();
       if (attempt < maximumAttempts) {
-        await wait(retryDelayMilliseconds);
+        const waitMilliseconds = Math.min(
+          retryDelayMilliseconds,
+          Math.max(0, deadline - now()),
+        );
+        if (waitMilliseconds <= 0) throw deadlineError();
+        await wait(waitMilliseconds);
+        if (now() >= deadline) throw deadlineError();
       }
     }
   }
@@ -825,6 +869,8 @@ async function runPostPublish(root, options) {
   const evidence = await verifyEvidenceDirectory(directory, expectedCommit);
   const registry = await verifyPublishedRegistryWithRetry(expectedCommit, {
     maximumAttempts: integerOption(options, "--max-attempts", 31),
+    maximumDurationMilliseconds:
+      integerOption(options, "--max-duration-ms", 300_000),
     retryDelayMilliseconds:
       integerOption(options, "--retry-delay-ms", 10_000),
   });
@@ -886,6 +932,7 @@ async function main() {
     "--failed-package",
     "--failed-phase",
     "--max-attempts",
+    "--max-duration-ms",
     "--out",
     "--replace",
     "--revocation-attempted",
