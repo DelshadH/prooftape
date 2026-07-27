@@ -55,8 +55,9 @@ The bootstrap workflow:
    creation failures as non-rerunnable incidents after any package exists;
 9. downloads registry bytes, verifies SHA-256, `dist.integrity`, `dist.shasum`,
    package contents, repository identity, provenance subject, workflow, tag,
-   commit, and `alpha` dist-tag with a finite five-minute propagation retry
-   window, then runs `npm audit signatures`; and
+   commit, and `alpha` dist-tag with an absolute five-minute propagation
+   deadline that includes registry request time, then runs
+   `npm audit signatures`; and
 10. creates the GitHub prerelease only after the token revocation, registry,
     provenance, signature, and verification-artifact checks all succeed.
 

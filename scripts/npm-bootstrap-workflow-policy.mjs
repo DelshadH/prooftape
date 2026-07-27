@@ -249,9 +249,13 @@ export function auditNpmBootstrapWorkflow(text, version) {
   );
   const fiveMinutePropagationWindow = (
     text.includes('POSTPUBLISH_MAX_ATTEMPTS: "31"')
+    && text.includes('POSTPUBLISH_MAX_DURATION_MS: "300000"')
     && text.includes('POSTPUBLISH_RETRY_DELAY_MS: "10000"')
     && publishBlock.includes(
       '--max-attempts "${POSTPUBLISH_MAX_ATTEMPTS}"',
+    )
+    && publishBlock.includes(
+      '--max-duration-ms "${POSTPUBLISH_MAX_DURATION_MS}"',
     )
     && publishBlock.includes(
       '--retry-delay-ms "${POSTPUBLISH_RETRY_DELAY_MS}"',

@@ -135,6 +135,10 @@ describe("one-time npm first-publication workflow", () => {
         "POSTPUBLISH_MAX_ATTEMPTS: \"12\"",
       ),
       workflow.replace(
+        "POSTPUBLISH_MAX_DURATION_MS: \"300000\"",
+        "POSTPUBLISH_MAX_DURATION_MS: \"900000\"",
+      ),
+      workflow.replace(
         "gh release create",
         "echo skipped-github-release",
       ),

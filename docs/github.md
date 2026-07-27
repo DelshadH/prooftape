@@ -123,10 +123,11 @@ step receives the one-day granular token. That step publishes the real
 token with npm logout from an exit trap on every authenticated success or
 failure path. Registry bytes, integrity fields, package contents, provenance
 identity, and signatures are verified afterward without authentication, with a
-finite five-minute propagation window. The GitHub prerelease is created only
-after token revocation, registry and provenance verification, signature audit,
-and preservation of the publication-verification artifact. Failures after any
-publication are preserved as non-rerunnable incident evidence.
+five-minute absolute propagation deadline that includes registry request time.
+The GitHub prerelease is created only after token revocation, registry and
+provenance verification, signature audit, and preservation of the
+publication-verification artifact. Failures after any publication attempt are
+preserved as non-rerunnable incident evidence.
 
 Do not publish placeholder packages. Do not run the permanent `release.yml`
 workflow for `0.1.0-alpha.1` after the bootstrap consumes that immutable
