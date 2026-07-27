@@ -109,7 +109,24 @@ replacement.
 
 The policy workflow is prepared but cannot yet authenticate a first publish:
 all four npm package names were absent on 2026-07-26, and npm requires a package
-to exist before adding its trusted publisher. This conflict must be resolved by
-available registry authentication; it must not be bypassed with a hidden token.
-It does not block technical review or an owner-authorized GitHub release. The
-exact limitation is maintained in [RELEASING.md](../RELEASING.md).
+to exist before adding its trusted publisher.
+
+The reviewed first-publication exception is
+`.github/workflows/npm-bootstrap.yml`. It is manual, tag- and commit-bound,
+GitHub-hosted, and protected by the separate `npm-bootstrap` environment. Its
+read-only job rebuilds twice from clean source, runs every release gate, verifies
+the immutable tarball hashes and empty registry, and uploads reviewable evidence.
+Only its protected publish job receives `id-token: write`; only one step receives
+the one-day granular token. That step publishes the real `0.1.0-alpha.1`
+tarballs in dependency order with provenance and invalidates the token with npm
+logout from an exit trap on every authenticated success or failure path.
+Registry bytes, integrity fields, package contents, provenance identity, and
+signatures are verified afterward without authentication.
+
+Do not publish placeholder packages. Do not run the permanent `release.yml`
+workflow for `0.1.0-alpha.1` after the bootstrap consumes that immutable
+version. Configure each resulting package to trust `release.yml` and
+`npm-release`, select **Require two-factor authentication and disallow tokens**,
+and use OIDC beginning with the next prerelease. The exact owner setup,
+dry-run, incident, and revocation procedures are maintained in
+[RELEASING.md](../RELEASING.md).

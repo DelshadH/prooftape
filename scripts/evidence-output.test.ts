@@ -91,6 +91,18 @@ describe("quality-gate evidence output", () => {
       provenancePublish: true,
       passed: true,
     });
+    expect(report.npmBootstrapWorkflow).toMatchObject({
+      path: ".github/workflows/npm-bootstrap.yml",
+      version: "0.1.0-alpha.1",
+      manualDispatch: true,
+      protectedEnvironment: "npm-bootstrap",
+      tokenIsolatedToPublishStep: true,
+      provenancePublishOrder: true,
+      immediateTokenRevocation: true,
+      incidentHandling: true,
+      nonRerunnable: true,
+      passed: true,
+    });
   });
 
   it("fails closed for weakened release identity, permissions, pins, or auth", async () => {

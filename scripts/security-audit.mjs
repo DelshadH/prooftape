@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { checkedEvidenceOutput, writeEvidence } from "./evidence-output.mjs";
+import { auditNpmBootstrapWorkflow } from "./npm-bootstrap-workflow-policy.mjs";
 import { auditReleaseWorkflow } from "./release-workflow-policy.mjs";
 
 const root = process.cwd();
@@ -53,20 +54,25 @@ for (const [path, metadata] of packageEntries) {
 let scannedBytes = 0;
 let workflowCount = 0;
 let releaseWorkflowText = "";
+let npmBootstrapWorkflowText = "";
 for (const file of trackedFiles()) {
   const bytes = await readFile(resolve(root, file));
   scannedBytes += bytes.length;
   if (scannedBytes > 50 * 1024 * 1024) throw new Error("tracked source scan exceeded 50 MiB");
   if (bytes.includes(0)) continue;
   const text = bytes.toString("utf8");
+  const normalizedFile = file.replaceAll("\\", "/");
   for (const [label, pattern] of secretPatterns) {
     pattern.lastIndex = 0;
     if (pattern.test(text)) failures.push(`${file}: possible ${label}`);
   }
-  if (/^\.github\/workflows\/[^/]+\.ya?ml$/u.test(file.replaceAll("\\", "/"))) {
+  if (/^\.github\/workflows\/[^/]+\.ya?ml$/u.test(normalizedFile)) {
     workflowCount += 1;
-    if (file.replaceAll("\\", "/") === ".github/workflows/release.yml") {
+    if (normalizedFile === ".github/workflows/release.yml") {
       releaseWorkflowText = text;
+    }
+    if (normalizedFile === ".github/workflows/npm-bootstrap.yml") {
+      npmBootstrapWorkflowText = text;
     }
     if (/\bpull_request_target\s*:/u.test(text)) {
       failures.push(`${file}: pull_request_target is forbidden`);
@@ -77,15 +83,27 @@ for (const file of trackedFiles()) {
     for (const match of text.matchAll(/^\s*([a-z-]+):\s*write\s*$/gmu)) {
       const scope = match[1];
       const releaseOidc = (
-        file.replaceAll("\\", "/") === ".github/workflows/release.yml"
+        normalizedFile === ".github/workflows/release.yml"
         && scope === "id-token"
       );
-      if (!releaseOidc) {
+      const bootstrapOidc = (
+        normalizedFile === ".github/workflows/npm-bootstrap.yml"
+        && scope === "id-token"
+      );
+      if (!releaseOidc && !bootstrapOidc) {
         failures.push(`${file}: ${scope}: write permission is forbidden`);
       }
     }
     if (/\$\{\{\s*secrets\./u.test(text)) {
-      failures.push(`${file}: workflow secrets are forbidden`);
+      const oneTimeBootstrapSecret = (
+        normalizedFile === ".github/workflows/npm-bootstrap.yml"
+        && (text.match(/\$\{\{\s*secrets\.NPM_BOOTSTRAP_TOKEN\s*\}\}/gu)?.length ?? 0)
+          === 1
+        && (text.match(/\$\{\{\s*secrets\./gu)?.length ?? 0) === 1
+      );
+      if (!oneTimeBootstrapSecret) {
+        failures.push(`${file}: workflow secrets are forbidden`);
+      }
     }
     if (/persist-credentials:\s*true/u.test(text)) {
       failures.push(`${file}: persisted checkout credentials are forbidden`);
@@ -104,6 +122,13 @@ if (typeof version !== "string") throw new Error("workspace version is missing")
 const releaseWorkflowAudit = auditReleaseWorkflow(releaseWorkflowText, version);
 for (const failure of releaseWorkflowAudit.failures) {
   failures.push(`.github/workflows/release.yml: ${failure}`);
+}
+const npmBootstrapWorkflowAudit = auditNpmBootstrapWorkflow(
+  npmBootstrapWorkflowText,
+  version,
+);
+for (const failure of npmBootstrapWorkflowAudit.failures) {
+  failures.push(`.github/workflows/npm-bootstrap.yml: ${failure}`);
 }
 
 let releasingText = "";
@@ -129,6 +154,7 @@ const report = {
   trackedBytesScanned: scannedBytes,
   workflowsScanned: workflowCount,
   releaseWorkflow: releaseWorkflowAudit.report,
+  npmBootstrapWorkflow: npmBootstrapWorkflowAudit.report,
   failures,
   passed: failures.length === 0,
 };

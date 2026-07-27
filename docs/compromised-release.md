@@ -7,10 +7,13 @@ been compromised.
 ## Contain
 
 1. Stop or cancel every release workflow run and do not retry failed publishes.
-2. Disable the npm trusted-publisher entries for all four ProofTape packages.
-3. Remove pending deployment approvals from the `npm-release` environment and
+2. Revoke the npm bootstrap token, delete `NPM_BOOTSTRAP_TOKEN` from the
+   `npm-bootstrap` environment, and preserve proof of both actions.
+3. Disable the npm trusted-publisher entries for all four ProofTape packages.
+4. Remove pending deployment approvals from the `npm-release` and
+   `npm-bootstrap` environments and
    revoke affected GitHub sessions, keys, apps, and credentials.
-4. Preserve the workflow log, GitHub artifact, tag object, commit, npm package
+5. Preserve the workflow log, GitHub artifact, tag object, commit, npm package
    metadata, provenance bundle, registry timestamps, and audit events.
 
 Do not delete evidence to make the registry state look clean.
@@ -31,8 +34,9 @@ candidate capsule is not evidence that the npm release itself was compromised.
 1. Deprecate affected versions through the npm website with a concise warning.
 2. Publish no replacement until the trust path and protected environment have
    been rebuilt and independently reviewed.
-3. Correct the issue in a new commit, version, reviewed PR, and immutable tag;
-   npm versions cannot be overwritten.
+3. Correct the issue in a new commit, coherent four-package version, reviewed
+   PR, and immutable tag; npm versions cannot be overwritten and an incomplete
+   version set must not be completed piecemeal under a later version.
 4. Replace all workflow or Action pins that reference affected commits.
 5. Publish a GitHub security advisory when package integrity, publisher
    identity, source provenance, or user exposure is in doubt.
