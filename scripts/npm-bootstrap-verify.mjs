@@ -432,13 +432,25 @@ export function buildPublicationIncident({
   expectedCommit,
   failedPhase,
   failedPackage,
+  verificationStage,
   attemptedPackages,
   revocationAttempted,
   revocationSucceeded,
   registryStates,
 }) {
   const expectedNames = RELEASE_PACKAGES.map((entry) => entry.name);
-  const failedPhases = ["authentication", "publish", "token-revocation"];
+  const failedPhases = [
+    "authentication",
+    "publish",
+    "token-revocation",
+    "postpublish-verification",
+  ];
+  const verificationStages = [
+    "registry-provenance-signatures",
+    "verification-artifact-upload",
+    "github-release-creation",
+  ];
+  const postPublishFailure = failedPhase === "postpublish-verification";
   if (
     !/^[a-f0-9]{40}$/u.test(expectedCommit)
     || !failedPhases.includes(failedPhase)
@@ -447,12 +459,22 @@ export function buildPublicationIncident({
         ? !expectedNames.includes(failedPackage)
         : failedPackage !== undefined
     )
+    || (
+      postPublishFailure
+        ? !verificationStages.includes(verificationStage)
+        : verificationStage !== undefined
+    )
     || !Array.isArray(attemptedPackages)
     || attemptedPackages.some((name) => !expectedNames.includes(name))
     || new Set(attemptedPackages).size !== attemptedPackages.length
+    || (
+      postPublishFailure
+      && JSON.stringify(attemptedPackages) !== JSON.stringify(expectedNames)
+    )
     || typeof revocationAttempted !== "boolean"
     || typeof revocationSucceeded !== "boolean"
     || (revocationSucceeded && !revocationAttempted)
+    || (postPublishFailure && !revocationSucceeded)
     || !Array.isArray(registryStates)
     || JSON.stringify(registryStates.map((state) => state.name))
       !== JSON.stringify(expectedNames)
@@ -467,14 +489,22 @@ export function buildPublicationIncident({
   const publishedPackages = registryStates
     .filter((state) => state.versionExists)
     .map((state) => state.name);
-  const partialPublication = (
-    publishedPackages.length > 0
-    && publishedPackages.length < RELEASE_PACKAGES.length
-  );
   const registryStateUnknown = registryStates.some(
     (state) => state.versionExists === null,
   );
-  const releaseIncident = publishedPackages.length > 0 || registryStateUnknown;
+  const publicationState = registryStateUnknown
+    ? "unknown"
+    : publishedPackages.length === RELEASE_PACKAGES.length
+      ? "complete"
+      : publishedPackages.length > 0
+        ? "partial"
+        : "not-observed";
+  const partialPublication = publicationState === "partial";
+  const releaseIncident = (
+    postPublishFailure
+    || publishedPackages.length > 0
+    || registryStateUnknown
+  );
   return {
     schemaVersion: "1",
     kind: "prooftape-npm-bootstrap-incident",
@@ -483,9 +513,15 @@ export function buildPublicationIncident({
     severity: releaseIncident ? "release-incident" : "publication-failure",
     partialPublication,
     registryStateUnknown,
-    rerunAllowed: publishedPackages.length === 0 && !registryStateUnknown,
+    publicationState,
+    rerunAllowed: (
+      !postPublishFailure
+      && publishedPackages.length === 0
+      && !registryStateUnknown
+    ),
     failedPhase,
     failedPackage: failedPackage ?? null,
+    verificationStage: verificationStage ?? null,
     attemptedPackages,
     revocationAttempted,
     revocationSucceeded,
@@ -644,6 +680,41 @@ export async function verifyPublishedRegistry(
   return results;
 }
 
+export async function verifyPublishedRegistryWithRetry(
+  expectedCommit,
+  {
+    maximumAttempts = 31,
+    retryDelayMilliseconds = 10_000,
+    verify = verifyPublishedRegistry,
+    wait = (milliseconds) => new Promise(
+      (resolveDelay) => setTimeout(resolveDelay, milliseconds),
+    ),
+  } = {},
+) {
+  if (
+    !Number.isSafeInteger(maximumAttempts)
+    || maximumAttempts < 1
+    || maximumAttempts > 31
+    || !Number.isSafeInteger(retryDelayMilliseconds)
+    || retryDelayMilliseconds < 0
+    || retryDelayMilliseconds > 10_000
+  ) {
+    throw new Error("invalid bounded post-publication retry configuration");
+  }
+  let lastError;
+  for (let attempt = 1; attempt <= maximumAttempts; attempt += 1) {
+    try {
+      return await verify(expectedCommit);
+    } catch (error) {
+      lastError = error;
+      if (attempt < maximumAttempts) {
+        await wait(retryDelayMilliseconds);
+      }
+    }
+  }
+  throw lastError;
+}
+
 function parseOptions(args, allowed) {
   const options = new Map();
   for (let index = 0; index < args.length; index += 1) {
@@ -682,6 +753,19 @@ function requiredBooleanOption(options, name) {
     throw new Error(`${name} must be true or false`);
   }
   return value === "true";
+}
+
+function integerOption(options, name, defaultValue) {
+  const value = options.get(name);
+  if (value === undefined) return defaultValue;
+  if (typeof value !== "string" || !/^(?:0|[1-9][0-9]*)$/u.test(value)) {
+    throw new Error(`${name} must be a non-negative integer`);
+  }
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed)) {
+    throw new Error(`${name} must be a safe integer`);
+  }
+  return parsed;
 }
 
 async function writeReport(root, outputArgument, replace, report) {
@@ -739,20 +823,11 @@ async function runPostPublish(root, options) {
     throw new Error("bootstrap evidence must be .evidence/release");
   }
   const evidence = await verifyEvidenceDirectory(directory, expectedCommit);
-  let registry;
-  let lastError;
-  for (let attempt = 1; attempt <= 12; attempt += 1) {
-    try {
-      registry = await verifyPublishedRegistry(expectedCommit);
-      break;
-    } catch (error) {
-      lastError = error;
-      if (attempt < 12) {
-        await new Promise((resolveDelay) => setTimeout(resolveDelay, 5_000));
-      }
-    }
-  }
-  if (!registry) throw lastError;
+  const registry = await verifyPublishedRegistryWithRetry(expectedCommit, {
+    maximumAttempts: integerOption(options, "--max-attempts", 31),
+    retryDelayMilliseconds:
+      integerOption(options, "--retry-delay-ms", 10_000),
+  });
   const report = {
     schemaVersion: "1",
     kind: "prooftape-npm-bootstrap-publication-verification",
@@ -785,6 +860,7 @@ async function runIncident(root, options) {
     expectedCommit,
     failedPhase: requiredOption(options, "--failed-phase"),
     failedPackage: options.get("--failed-package"),
+    verificationStage: options.get("--verification-stage"),
     attemptedPackages,
     revocationAttempted:
       requiredBooleanOption(options, "--revocation-attempted"),
@@ -809,10 +885,13 @@ async function main() {
     "--dir",
     "--failed-package",
     "--failed-phase",
+    "--max-attempts",
     "--out",
     "--replace",
     "--revocation-attempted",
     "--revocation-succeeded",
+    "--retry-delay-ms",
+    "--verification-stage",
   ]);
   const options = parseOptions(args, allowed);
   const root = process.cwd();

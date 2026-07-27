@@ -19,6 +19,7 @@ import {
   validateReleaseManifest,
   validatePublishedPackage,
   verifyEvidenceDirectory,
+  verifyPublishedRegistryWithRetry,
 } from "./npm-bootstrap-verify.mjs";
 
 const commit = "b56ef43a944ea800671ed64397d55420f63c692c";
@@ -402,5 +403,52 @@ describe("npm bootstrap evidence verifier", () => {
       registryStateUnknown: true,
       rerunAllowed: false,
     });
+  });
+
+  it("records irreversible post-publication verification failure as non-rerunnable", () => {
+    const report = buildPublicationIncident({
+      expectedCommit: commit,
+      failedPhase: "postpublish-verification",
+      verificationStage: "registry-provenance-signatures",
+      attemptedPackages: RELEASE_PACKAGES.map((entry) => entry.name),
+      revocationAttempted: true,
+      revocationSucceeded: true,
+      registryStates: RELEASE_PACKAGES.map((entry) => ({
+        name: entry.name,
+        versionExists: true,
+        lookup: "known",
+      })),
+    });
+
+    expect(report).toMatchObject({
+      kind: "prooftape-npm-bootstrap-incident",
+      failedPhase: "postpublish-verification",
+      verificationStage: "registry-provenance-signatures",
+      publicationState: "complete",
+      attemptedPackages: RELEASE_PACKAGES.map((entry) => entry.name),
+      revocationSucceeded: true,
+      rerunAllowed: false,
+    });
+  });
+
+  it("keeps registry and provenance propagation retries finite and near five minutes", async () => {
+    let verificationAttempts = 0;
+    const waits: number[] = [];
+    const result = await verifyPublishedRegistryWithRetry(commit, {
+      maximumAttempts: 31,
+      retryDelayMilliseconds: 10_000,
+      verify: async () => {
+        verificationAttempts += 1;
+        if (verificationAttempts < 3) throw new Error("not propagated");
+        return [{ passed: true }];
+      },
+      wait: async (milliseconds) => {
+        waits.push(milliseconds);
+      },
+    });
+
+    expect(result).toEqual([{ passed: true }]);
+    expect(verificationAttempts).toBe(3);
+    expect(waits).toEqual([10_000, 10_000]);
   });
 });

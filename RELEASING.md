@@ -31,12 +31,14 @@ any expected package version exists.
 
 The bootstrap workflow:
 
-1. accepts only `workflow_dispatch` on the exact `v0.1.0-alpha.1` tag;
+1. accepts only `workflow_dispatch` on the exact `v0.1.0-alpha.1` tag and
+   serializes every attempt with a fixed, non-canceling concurrency group;
 2. requires the tag, workflow SHA, checkout, and supplied full commit SHA to
    agree, and requires that commit to be reachable from protected `main`;
-3. installs without lifecycle scripts and runs typecheck, all tests, package
-   smoke, examples, killer demo, terminal recording, real upgrades, corpus,
-   performance, security, and release preparation;
+3. pins Node `24.18.0` and npm `11.16.0`, installs without lifecycle scripts,
+   and runs typecheck, all tests, package smoke, examples, killer demo, terminal
+   recording, real upgrades, corpus, performance, security, and release
+   preparation;
 4. uses release preparation's two independent clean-source builds;
 5. checks the exact eight-file release evidence set, every retained checksum,
    the four immutable tarball SHA-256 values, package identities, versions,
@@ -48,11 +50,15 @@ The bootstrap workflow:
    invokes npm logout from an exit trap on success, authentication failure, or
    any partial publish failure so the token-revocation attempt cannot be
    bypassed by an earlier command;
-8. records an interrupted sequence as a publication incident and refuses a
-   rerun once any expected version exists; and
+8. records authentication, partial publication, token revocation,
+   post-publication verification, evidence upload, and GitHub prerelease
+   creation failures as non-rerunnable incidents after any package exists;
 9. downloads registry bytes, verifies SHA-256, `dist.integrity`, `dist.shasum`,
    package contents, repository identity, provenance subject, workflow, tag,
-   commit, and `alpha` dist-tag, then runs `npm audit signatures`.
+   commit, and `alpha` dist-tag with a finite five-minute propagation retry
+   window, then runs `npm audit signatures`; and
+10. creates the GitHub prerelease only after the token revocation, registry,
+    provenance, signature, and verification-artifact checks all succeed.
 
 The secret is never printed, cached, uploaded, copied into release evidence, or
 available to the preparation and verification steps.
@@ -118,9 +124,8 @@ The exact diff must then receive independent AI review and exact-head CI.
 Only after the owner says `PUBLISH`:
 
 1. create immutable tag `v0.1.0-alpha.1` at the final reviewed workflow commit;
-2. create the GitHub release from the verified evidence;
-3. add the one-day token to `npm-bootstrap`; and
-4. dispatch the bootstrap once:
+2. add the one-day token to `npm-bootstrap`; and
+3. dispatch the bootstrap once:
 
 ```bash
 gh workflow run npm-bootstrap.yml \
@@ -131,6 +136,11 @@ gh workflow run npm-bootstrap.yml \
   -f confirm_token_exception=ONE_TIME_TOKEN_AUTHORIZED
 gh run watch --exit-status
 ```
+
+The workflow creates the GitHub prerelease only after all four npm publications
+were attempted successfully, token revocation succeeded, the bounded registry
+propagation check passed, provenance and signatures were verified, and the
+publication-verification artifact was preserved. Do not create it beforehand.
 
 After the run, confirm npm logout succeeded, delete `NPM_BOOTSTRAP_TOKEN` from
 the GitHub environment, and confirm the token is absent under npm **Access

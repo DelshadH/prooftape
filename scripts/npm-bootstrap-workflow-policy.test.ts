@@ -21,10 +21,19 @@ describe("one-time npm first-publication workflow", () => {
       version: "0.1.0-alpha.1",
       manualDispatch: true,
       exactTag: "v0.1.0-alpha.1",
+      serialized: true,
       expectedCommitBound: true,
       tagOnMain: true,
       passed: true,
     });
+
+    const concurrent = workflow.replace(
+      "group: prooftape-npm-bootstrap-v0.1.0-alpha.1",
+      "group: unprotected-bootstrap",
+    );
+    expect(
+      auditNpmBootstrapWorkflow(concurrent, "0.1.0-alpha.1").report.serialized,
+    ).toBe(false);
   });
 
   it("isolates the one-time token and OIDC permission to a protected publish job", async () => {
@@ -41,6 +50,8 @@ describe("one-time npm first-publication workflow", () => {
       tokenIsolatedToPublishStep: true,
       explicitPublishApproval: true,
       actionsPinned: true,
+      publishIdentityRechecked: true,
+      pinnedToolchain: true,
       passed: true,
     });
 
@@ -58,6 +69,12 @@ describe("one-time npm first-publication workflow", () => {
       workflow.replace(
         "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
         "actions/checkout@v7",
+      ),
+      workflow.replace('node-version: "24.18.0"', "node-version: 24"),
+      workflow.replace('NPM_VERSION: "11.16.0"', 'NPM_VERSION: "11.5.1"'),
+      workflow.replace(
+        'test "${PROOFTAPE_WORKFLOW_SHA}" = "${PROOFTAPE_EXPECTED_COMMIT}"',
+        "true",
       ),
     ]) {
       expect(auditNpmBootstrapWorkflow(weakened, "0.1.0-alpha.1").report.passed)
@@ -83,6 +100,9 @@ describe("one-time npm first-publication workflow", () => {
       cryptographicProvenanceVerification: true,
       registryIdentityVerification: true,
       incidentHandling: true,
+      postPublicationIncidentHandling: true,
+      fiveMinutePropagationWindow: true,
+      githubPrereleaseAfterVerification: true,
       nonRerunnable: true,
       passed: true,
     });
@@ -106,6 +126,22 @@ describe("one-time npm first-publication workflow", () => {
       workflow.replace("set +x", "set -x"),
       workflow.replace("package-manager-cache: false", "package-manager-cache: true"),
       workflow.replace("npm audit signatures", "echo skipped-signatures"),
+      workflow.replace(
+        "--failed-phase postpublish-verification",
+        "--failed-phase publish",
+      ),
+      workflow.replace(
+        "POSTPUBLISH_MAX_ATTEMPTS: \"31\"",
+        "POSTPUBLISH_MAX_ATTEMPTS: \"12\"",
+      ),
+      workflow.replace(
+        "gh release create",
+        "echo skipped-github-release",
+      ),
+      workflow.replace(
+        'receipt.expectedCommit !== process.env.PROOFTAPE_EXPECTED_COMMIT',
+        "false",
+      ),
       workflow.replace("if: ${{ failure() }}", "if: ${{ false }}"),
       workflow.replace(
         /(path: \.evidence\/npm-bootstrap-incident\.json\r?\n\s+if-no-files-found:) error/u,

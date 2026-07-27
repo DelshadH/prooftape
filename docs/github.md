@@ -113,15 +113,20 @@ to exist before adding its trusted publisher.
 
 The reviewed first-publication exception is
 `.github/workflows/npm-bootstrap.yml`. It is manual, tag- and commit-bound,
-GitHub-hosted, and protected by the separate `npm-bootstrap` environment. Its
-read-only job rebuilds twice from clean source, runs every release gate, verifies
-the immutable tarball hashes and empty registry, and uploads reviewable evidence.
-Only its protected publish job receives `id-token: write`; only one step receives
-the one-day granular token. That step publishes the real `0.1.0-alpha.1`
-tarballs in dependency order with provenance and invalidates the token with npm
-logout from an exit trap on every authenticated success or failure path.
-Registry bytes, integrity fields, package contents, provenance identity, and
-signatures are verified afterward without authentication.
+GitHub-hosted, serialized by a non-canceling global lock, and protected by the
+separate `npm-bootstrap` environment. Its read-only job pins Node `24.18.0` and
+npm `11.16.0`, rebuilds twice from clean source, runs every release gate,
+verifies the immutable tarball hashes and empty registry, and uploads reviewable
+evidence. Only its protected publish job receives `id-token: write`; only one
+step receives the one-day granular token. That step publishes the real
+`0.1.0-alpha.1` tarballs in dependency order with provenance and invalidates the
+token with npm logout from an exit trap on every authenticated success or
+failure path. Registry bytes, integrity fields, package contents, provenance
+identity, and signatures are verified afterward without authentication, with a
+finite five-minute propagation window. The GitHub prerelease is created only
+after token revocation, registry and provenance verification, signature audit,
+and preservation of the publication-verification artifact. Failures after any
+publication are preserved as non-rerunnable incident evidence.
 
 Do not publish placeholder packages. Do not run the permanent `release.yml`
 workflow for `0.1.0-alpha.1` after the bootstrap consumes that immutable

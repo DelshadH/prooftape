@@ -32,6 +32,14 @@ describe("prospective release documentation", () => {
     expect(releasing).toContain("ONE_TIME_TOKEN_AUTHORIZED");
     expect(releasing).toContain("Require two-factor authentication and disallow tokens");
     expect(releasing).toContain("Do not run `release.yml` for `0.1.0-alpha.1`");
+    expect(releasing).toContain("Node `24.18.0` and npm `11.16.0`");
+    expect(releasing).toContain(
+      "The workflow creates the GitHub prerelease only after",
+    );
+    expect(releasing).not.toContain(
+      "create the GitHub release from the verified evidence",
+    );
+    expect(github).toMatch(/GitHub prerelease is created only\s+after/u);
     expect(releasing).not.toMatch(/^\s*npm publish\b/mu);
   });
 });
