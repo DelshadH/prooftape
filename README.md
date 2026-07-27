@@ -11,10 +11,12 @@ it also writes an executable minimal reproduction.
 
 > **Status:** honest pre-0.1 seed. The end-to-end CLI, recorder, schemas,
 > isolated worktrees, reproduction generator, package smoke test, and
-> least-privilege reusable workflow are implemented and exercised. The npm
-> packages are not published yet, the supported JavaScript surface is
-> deliberately narrow, the local runner is not a sandbox for hostile code, and
-> observation authenticity is not established against code under test.
+> least-privilege reusable workflow are implemented and exercised. A protected,
+> one-time workflow for publishing the genuine first alpha is prepared but has
+> not been authorized or run. The npm packages are not published yet, the
+> supported JavaScript surface is deliberately narrow, the local runner is not
+> a sandbox for hostile code, and observation authenticity is not established
+> against code under test.
 
 ## Run from a checkout
 
@@ -166,9 +168,11 @@ Project decisions and review authority are documented in
 [GOVERNANCE.md](GOVERNANCE.md), the supported maintenance window in
 [SUPPORT.md](SUPPORT.md), and release operations in
 [RELEASING.md](RELEASING.md). The four npm names are not registered and the
-connected environment has no npm authentication. This registry-only limitation
-does not weaken the technical alpha assessment or authorize publication before
-the final owner decision.
+connected environment has no npm authentication. The documented bootstrap uses
+a temporary protected token only to publish the exact reviewed alpha from
+GitHub-hosted CI; placeholder packages are prohibited. This registry-only
+limitation does not weaken the technical alpha assessment or authorize
+publication before the final owner decision.
 
 ## Security
 

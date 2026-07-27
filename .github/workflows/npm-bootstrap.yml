@@ -1,0 +1,276 @@
+name: Bootstrap first npm publication
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Exact reviewed release tag
+        required: true
+        type: string
+        default: v0.1.0-alpha.1
+      expected_commit:
+        description: Full reviewed main commit resolved by the tag
+        required: true
+        type: string
+      publish:
+        description: Publish the four real alpha packages after preparation
+        required: true
+        type: boolean
+        default: false
+      confirm_token_exception:
+        description: Enter ONE_TIME_TOKEN_AUTHORIZED only after owner approval
+        required: true
+        type: string
+        default: DO_NOT_PUBLISH
+
+permissions:
+  contents: read
+
+env:
+  RELEASE_VERSION: "0.1.0-alpha.1"
+
+jobs:
+  prepare:
+    name: Validate first-publication identity
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Reject any ref or commit other than the reviewed release
+        env:
+          PROOFTAPE_RELEASE_REF: ${{ github.ref }}
+          PROOFTAPE_RELEASE_TAG: ${{ inputs.tag }}
+          PROOFTAPE_EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          PROOFTAPE_WORKFLOW_SHA: ${{ github.sha }}
+        run: |
+          EXPECTED_TAG="v${RELEASE_VERSION}"
+          EXPECTED_REF="refs/tags/${EXPECTED_TAG}"
+          if [[ "${PROOFTAPE_RELEASE_TAG}" != "${EXPECTED_TAG}" ]]; then
+            echo "Expected ${EXPECTED_TAG}; received ${PROOFTAPE_RELEASE_TAG}" >&2
+            exit 1
+          fi
+          if [[ "${PROOFTAPE_RELEASE_REF}" != "${EXPECTED_REF}" ]]; then
+            echo "Expected workflow ref ${EXPECTED_REF}; received ${PROOFTAPE_RELEASE_REF}" >&2
+            exit 1
+          fi
+          if [[ ! "${PROOFTAPE_EXPECTED_COMMIT}" =~ ^[a-f0-9]{40}$ ]]; then
+            echo "expected_commit must be a full lowercase commit SHA" >&2
+            exit 1
+          fi
+          if [[ "${PROOFTAPE_WORKFLOW_SHA}" != "${PROOFTAPE_EXPECTED_COMMIT}" ]]; then
+            echo "Workflow SHA does not equal expected_commit" >&2
+            exit 1
+          fi
+      - name: Check out the exact reviewed tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify the tag resolves to the expected protected-main commit
+        env:
+          PROOFTAPE_RELEASE_TAG: ${{ inputs.tag }}
+          PROOFTAPE_EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+        run: |
+          test "$(git rev-parse HEAD)" = "${PROOFTAPE_EXPECTED_COMMIT}"
+          test "$(git rev-list -n 1 "${PROOFTAPE_RELEASE_TAG}")" = "${PROOFTAPE_EXPECTED_COMMIT}"
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          git merge-base --is-ancestor "${PROOFTAPE_EXPECTED_COMMIT}" refs/remotes/origin/main
+      - name: Set up Node without a registry credential
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Require npm 11.5.1 or newer
+        run: |
+          node -e '
+            const actual = process.argv[1].split(".").map(Number);
+            const minimum = process.argv[2].split(".").map(Number);
+            const acceptable = actual.some((part, index) =>
+              part > minimum[index] && actual.slice(0, index).every(
+                (prefix, prefixIndex) => prefix === minimum[prefixIndex]
+              )
+            ) || actual.every((part, index) => part === minimum[index]);
+            if (!acceptable) {
+              throw new Error(`npm ${process.argv[2]} or newer is required; found ${process.argv[1]}`);
+            }
+          ' "$(npm --version)" "11.5.1"
+      - name: Install the exact lockfile without lifecycle scripts
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Run typecheck and all tests
+        run: npm run check
+      - name: Test the packed CLI and Action
+        run: npm run smoke:package
+      - name: Run project-owned consumer examples
+        run: npm run smoke:examples
+      - name: Run the clean-room killer demo
+        run: npm run demo
+      - name: Generate the bounded terminal demo recording
+        run: npm run demo:record
+      - name: Run isolated real-package upgrade gates
+        run: npm run real-upgrades
+      - name: Run the public compatibility corpus
+        run: npm run corpus
+      - name: Enforce the published performance budget
+        run: npm run performance
+      - name: Run dependency, source, secret, and workflow security checks
+        run: npm run security
+      - name: Build twice from clean source and prepare release evidence
+        run: npm run release:prepare
+      - name: Verify exact evidence, immutable hashes, contents, and empty registry
+        env:
+          PROOFTAPE_EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+        run: |
+          node scripts/npm-bootstrap-verify.mjs preflight \
+            --dir .evidence/release \
+            --commit "${PROOFTAPE_EXPECTED_COMMIT}" \
+            --out .evidence/npm-bootstrap-preflight.json \
+            --replace
+      - name: Upload dry-run and exact release evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: prooftape-0.1.0-alpha.1-npm-bootstrap-evidence
+          path: |
+            .evidence/release
+            .evidence/npm-bootstrap-preflight.json
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 30
+          compression-level: 0
+
+  publish:
+    name: Publish the real alpha once
+    needs: prepare
+    if: ${{ inputs.publish && inputs.confirm_token_exception == 'ONE_TIME_TOKEN_AUTHORIZED' }}
+    environment: npm-bootstrap
+    permissions:
+      contents: read
+      id-token: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out the exact reviewed tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up Node and the npm registry
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - name: Download the same-run reviewed evidence
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: prooftape-0.1.0-alpha.1-npm-bootstrap-evidence
+          path: .evidence
+      - name: Recheck evidence and registry absence immediately before authentication
+        env:
+          PROOFTAPE_EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+        run: |
+          node scripts/npm-bootstrap-verify.mjs preflight \
+            --dir .evidence/release \
+            --commit "${PROOFTAPE_EXPECTED_COMMIT}" \
+            --out .evidence/npm-bootstrap-publish-preflight.json \
+            --replace
+      - name: Publish reviewed packages and immediately revoke the token
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_BOOTSTRAP_TOKEN }}
+          PROOFTAPE_EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+        run: |
+          set -euo pipefail
+          set +x
+          attempted=()
+          current=""
+          failed_phase="authentication"
+          revocation_attempted="false"
+          revocation_succeeded="false"
+          record_incident() {
+            incident_args=(
+              incident
+              --commit "${PROOFTAPE_EXPECTED_COMMIT}"
+              --failed-phase "${failed_phase}"
+              --attempted "$(IFS=,; echo "${attempted[*]}")"
+              --revocation-attempted "${revocation_attempted}"
+              --revocation-succeeded "${revocation_succeeded}"
+              --out .evidence/npm-bootstrap-incident.json
+              --replace
+            )
+            if [[ -n "${current}" ]]; then
+              incident_args+=(--failed-package "${current}")
+            fi
+            node scripts/npm-bootstrap-verify.mjs "${incident_args[@]}" || true
+          }
+          finish_authenticated_step() {
+            status=$?
+            trap - EXIT
+            revocation_status=0
+            revocation_attempted="true"
+            if ! npm logout --registry=https://registry.npmjs.org/; then
+              revocation_status=1
+              echo "The one-time npm token could not be revoked." >&2
+            else
+              revocation_succeeded="true"
+            fi
+            if [ "$status" -ne 0 ] || [ "$revocation_status" -ne 0 ]; then
+              if [ "$status" -eq 0 ]; then
+                failed_phase="token-revocation"
+                current=""
+              fi
+              record_incident
+            fi
+            if [ "$status" -ne 0 ]; then
+              exit "$status"
+            fi
+            exit "$revocation_status"
+          }
+          publish_one() {
+            failed_phase="publish"
+            current="$1"
+            attempted+=("$1")
+            npm publish "$2" --access public --provenance --tag alpha
+          }
+          trap finish_authenticated_step EXIT
+          npm whoami >/dev/null
+          publish_one "@prooftape/schema" ".evidence/release/prooftape-schema-0.1.0-alpha.1.tgz"
+          publish_one "@prooftape/core" ".evidence/release/prooftape-core-0.1.0-alpha.1.tgz"
+          publish_one "@prooftape/hook" ".evidence/release/prooftape-hook-0.1.0-alpha.1.tgz"
+          publish_one "prooftape" ".evidence/release/prooftape-0.1.0-alpha.1.tgz"
+      - name: Verify registry bytes, metadata, alpha tag, and provenance identity
+        env:
+          PROOFTAPE_EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+        run: |
+          node scripts/npm-bootstrap-verify.mjs postpublish \
+            --dir .evidence/release \
+            --commit "${PROOFTAPE_EXPECTED_COMMIT}" \
+            --out .evidence/npm-bootstrap-publication-verification.json \
+            --replace
+          mkdir -p .evidence/npm-signature-audit
+          cd .evidence/npm-signature-audit
+          npm init --yes >/dev/null
+          npm install --ignore-scripts --no-audit --no-fund --save-exact \
+            "@prooftape/schema@0.1.0-alpha.1" \
+            "@prooftape/core@0.1.0-alpha.1" \
+            "@prooftape/hook@0.1.0-alpha.1" \
+            "prooftape@0.1.0-alpha.1"
+          npm audit signatures
+      - name: Upload registry verification
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: prooftape-0.1.0-alpha.1-npm-publication-verification
+          path: .evidence/npm-bootstrap-publication-verification.json
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 30
+      - name: Preserve publication incident evidence
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: prooftape-0.1.0-alpha.1-npm-bootstrap-incident
+          path: .evidence/npm-bootstrap-incident.json
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 90

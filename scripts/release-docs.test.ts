@@ -18,4 +18,20 @@ describe("prospective release documentation", () => {
     expect(changelog).not.toMatch(/^## 0\.1\.0-alpha\.1 - \d{4}-\d{2}-\d{2}$/mu);
     expect(changelog).not.toContain("uploaded before approval");
   });
+
+  it("documents only the reviewed real-alpha first-publication bootstrap", async () => {
+    const releasing = await readFile(resolve(repository, "RELEASING.md"), "utf8");
+    const github = await readFile(resolve(repository, "docs/github.md"), "utf8");
+
+    for (const document of [releasing, github]) {
+      expect(document).toContain(".github/workflows/npm-bootstrap.yml");
+      expect(document).toContain("0.1.0-alpha.1");
+      expect(document).not.toContain("0.0.0-bootstrap.0");
+    }
+    expect(releasing).toContain("Do not publish empty, placeholder, or unrelated packages.");
+    expect(releasing).toContain("ONE_TIME_TOKEN_AUTHORIZED");
+    expect(releasing).toContain("Require two-factor authentication and disallow tokens");
+    expect(releasing).toContain("Do not run `release.yml` for `0.1.0-alpha.1`");
+    expect(releasing).not.toMatch(/^\s*npm publish\b/mu);
+  });
 });
