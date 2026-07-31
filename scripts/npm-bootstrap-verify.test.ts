@@ -316,6 +316,18 @@ describe("npm bootstrap evidence verifier", () => {
       provenanceCommit: commit,
     });
 
+    const noLatestPackument = {
+      ...packument,
+      "dist-tags": { alpha: entry.version },
+    };
+    expect(validatePublishedPackage(
+      publishedEntry,
+      tarball,
+      noLatestPackument,
+      attestations,
+      commit,
+    )).toMatchObject({ latestTag: null });
+
     packument["dist-tags"].latest = "0.1.0";
     expect(() => validatePublishedPackage(
       publishedEntry,

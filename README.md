@@ -9,14 +9,11 @@ compares the results. It detects changed returns, errors, argument mutation,
 call presence, and relative order. When the captured values are safe to replay,
 it also writes an executable minimal reproduction.
 
-> **Status:** honest pre-0.1 seed. The end-to-end CLI, recorder, schemas,
-> isolated worktrees, reproduction generator, package smoke test, and
-> least-privilege reusable workflow are implemented and exercised. A protected,
-> one-time workflow for publishing the genuine first alpha is prepared but has
-> not been authorized or run. The npm packages are not published yet, the
-> supported JavaScript surface is deliberately narrow, the local runner is not
-> a sandbox for hostile code, and observation authenticity is not established
-> against code under test.
+> **Status:** `0.1.0-alpha.1` is published on npm from reviewed commit
+> `16ff070e9cc0101c512849dac689a666abef0487` with registry signatures and
+> GitHub provenance. The supported JavaScript surface is deliberately narrow,
+> the local runner is not a sandbox for hostile code, and observation
+> authenticity is not established against code under test.
 
 ## Run from a checkout
 
@@ -37,17 +34,12 @@ node packages/cli/dist/cli.js compare \
 repository. It creates detached worktrees, runs `npm ci --ignore-scripts` in
 each, records the same direct command, and removes the worktrees afterward.
 
-## Verify a packed build
+## Install the alpha
 
-Before registry publication, install the four checksum-verified tarballs
-prepared by `npm run release:prepare` into a consumer project:
+Install the explicit `alpha` tag in a consumer project:
 
 ```bash
-npm install --ignore-scripts --no-audit --no-fund \
-  /path/to/prooftape-schema-0.1.0-alpha.1.tgz \
-  /path/to/prooftape-core-0.1.0-alpha.1.tgz \
-  /path/to/prooftape-hook-0.1.0-alpha.1.tgz \
-  /path/to/prooftape-0.1.0-alpha.1.tgz
+npm install --save-dev --ignore-scripts --no-audit --no-fund prooftape@alpha
 
 npx --no-install prooftape --help
 npx --no-install prooftape --version
@@ -167,12 +159,11 @@ The independent packed-package and reusable-workflow proof is recorded in
 Project decisions and review authority are documented in
 [GOVERNANCE.md](GOVERNANCE.md), the supported maintenance window in
 [SUPPORT.md](SUPPORT.md), and release operations in
-[RELEASING.md](RELEASING.md). The four npm names are not registered and the
-connected environment has no npm authentication. The documented bootstrap uses
-a temporary protected token only to publish the exact reviewed alpha from
-GitHub-hosted CI; placeholder packages are prohibited. This registry-only
-limitation does not weaken the technical alpha assessment or authorize
-publication before the final owner decision.
+[RELEASING.md](RELEASING.md). All four npm names contain the exact reviewed
+`0.1.0-alpha.1` packages.
+The one-time bootstrap credential was revoked and removed from GitHub. Placeholder
+packages were never published. Permanent trusted-publisher configuration remains
+an owner account step before the next prerelease uses tokenless OIDC.
 
 ## Security
 
