@@ -107,9 +107,9 @@ dependency order with provenance. See
 [the compromise procedure](compromised-release.md) for containment and
 replacement.
 
-The policy workflow is prepared but cannot yet authenticate a first publish:
-all four npm package names were absent on 2026-07-26, and npm requires a package
-to exist before adding its trusted publisher.
+The one-time bootstrap created all four genuine `0.1.0-alpha.1` package
+records on 2026-07-31. npm requires a package to exist before adding its
+trusted publisher, so later releases use the permanent OIDC workflow.
 
 The reviewed first-publication exception is
 `.github/workflows/npm-bootstrap.yml`. It is manual, tag- and commit-bound,
@@ -128,6 +128,11 @@ The GitHub prerelease is created only after token revocation, registry and
 provenance verification, signature audit, and preservation of the
 publication-verification artifact. Failures after any publication attempt are
 preserved as non-rerunnable incident evidence.
+
+For a package's sole first version, npm assigned both `alpha` and `latest` to
+the reviewed prerelease and rejected authenticated removal of `latest` with
+HTTP 400. The verifier accepts `latest` only in that exact one-version state,
+records both tags, and still rejects any different tag target.
 
 Do not publish placeholder packages. Do not run the permanent `release.yml`
 workflow for `0.1.0-alpha.1` after the bootstrap consumes that immutable

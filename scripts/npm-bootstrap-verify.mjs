@@ -327,7 +327,10 @@ export function validatePublishedPackage(
       entry.version,
     ])
     || packument?.["dist-tags"]?.alpha !== entry.version
-    || packument?.["dist-tags"]?.latest === entry.version
+    || (
+      packument?.["dist-tags"]?.latest !== undefined
+      && packument["dist-tags"].latest !== entry.version
+    )
     || versionMetadata?.name !== entry.name
     || versionMetadata?.version !== entry.version
   ) {
@@ -423,6 +426,7 @@ export function validatePublishedPackage(
     integrity: versionMetadata.dist.integrity,
     shasum: versionMetadata.dist.shasum,
     alphaTag: packument["dist-tags"].alpha,
+    latestTag: packument["dist-tags"].latest ?? null,
     provenanceCommit: source.digest.gitCommit,
     provenanceWorkflow: workflow.path,
   };
