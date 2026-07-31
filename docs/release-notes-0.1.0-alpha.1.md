@@ -1,17 +1,17 @@
 # ProofTape 0.1.0-alpha.1
 
-This document describes a prospective release candidate. No release tag,
-GitHub release, npm package, or npm distribution tag exists until the owner
-authorizes publication.
+`0.1.0-alpha.1` is published from immutable tag `v0.1.0-alpha.1` at
+commit `16ff070e9cc0101c512849dac689a666abef0487`. The four npm
+packages carry registry signatures and GitHub provenance from the reviewed
+one-time bootstrap workflow.
 
 Observation authenticity is not established against code under test. Candidate
 code shares the recorder's process authority and can suppress or forge its own
 captured calls. Exit 0 means only that no blocking difference was observed in
 captured supported calls.
 
-This is an alpha release candidate. The capsule, report, and
-reproduction-manifest JSON shapes become the stable public version 1 contract
-when this candidate is published.
+This is an alpha release. The capsule, report, and reproduction-manifest JSON
+shapes are the stable public version 1 contract.
 Artifacts made by unpublished `0.0.0` development builds are unsupported.
 
 ## Included
@@ -38,10 +38,16 @@ outside the alpha contract. Promise objects are returned unchanged and recorded
 as explicitly unsupported so ProofTape does not alter native unhandled-rejection
 semantics. The local runner is not a sandbox for hostile code.
 
-**REGISTRY AUTHENTICATION UNAVAILABLE**
+## Published packages
 
-Until publication is authorized, evaluate the checksum-verified tarballs
-attached to the release candidate evidence. If npm publication later succeeds,
-the packages will use the `alpha` distribution tag. Read
-[the product contract](product.md), [schema policy](schema-compatibility.md),
-and [security model](security-model.md) before evaluation.
+Install the CLI explicitly from the prerelease channel:
+
+```bash
+npm install --save-dev prooftape@alpha
+```
+
+npm assigned both `alpha` and `latest` to each package's sole first version.
+Both tags resolve to the same checksum-verified, provenance-bound
+`0.1.0-alpha.1` artifacts. Read [the product contract](product.md),
+[schema policy](schema-compatibility.md), and
+[security model](security-model.md) before evaluation.
