@@ -222,7 +222,7 @@ describe("npm bootstrap evidence verifier", () => {
       .rejects.toThrow("unexpected release evidence file set");
   });
 
-  it("binds registry hashes and provenance to the bootstrap workflow, tag, and commit", () => {
+  it("binds registry hashes and provenance for npm's first-version tags", () => {
     const entry = RELEASE_PACKAGES[0]!;
     const tarball = Buffer.from("reviewed package bytes");
     const publishedEntry = { ...entry, sha256: digest(tarball) };
@@ -262,7 +262,10 @@ describe("npm bootstrap evidence verifier", () => {
       + `${encodeURIComponent(entry.name)}@${entry.version}`;
     const packument = {
       name: entry.name,
-      "dist-tags": { alpha: entry.version },
+      "dist-tags": {
+        alpha: entry.version,
+        latest: entry.version,
+      },
       versions: {
         [entry.version]: {
           name: entry.name,
@@ -309,8 +312,19 @@ describe("npm bootstrap evidence verifier", () => {
       name: entry.name,
       version: entry.version,
       alphaTag: entry.version,
+      latestTag: entry.version,
       provenanceCommit: commit,
     });
+
+    packument["dist-tags"].latest = "0.1.0";
+    expect(() => validatePublishedPackage(
+      publishedEntry,
+      tarball,
+      packument,
+      attestations,
+      commit,
+    )).toThrow("unexpected package version or alpha dist-tag");
+    packument["dist-tags"].latest = entry.version;
 
     packument.versions[entry.version]!.repository.url =
       "git+https://github.com/attacker/replacement.git";
