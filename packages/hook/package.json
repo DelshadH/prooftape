@@ -23,7 +23,7 @@
   "dependencies": {
     "@prooftape/core": "0.1.0-alpha.1",
     "@prooftape/schema": "0.1.0-alpha.1",
-    "acorn": "^8.17.0"
+    "acorn": "^8.18.0"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
