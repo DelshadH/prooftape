@@ -108,9 +108,19 @@ export function auditReleaseWorkflow(text, version) {
     publishPosition += match.index + match[0].length + 1;
     return true;
   });
-  const npmFloor = (
-    text.includes("Require npm 11.5.1 or newer")
-    && text.includes('"11.5.1"')
+  const pinnedToolchain = (
+    (text.match(/node-version: "24\.18\.0"/gu)?.length ?? 0) === 2
+    && (text.match(/npm install --global "npm@11\.16\.0"/gu)?.length ?? 0) === 2
+    && (text.match(/test "\$\(node --version\)" = "v24\.18\.0"/gu)?.length ?? 0) === 2
+    && (text.match(/test "\$\(npm --version\)" = "11\.16\.0"/gu)?.length ?? 0) === 2
+  );
+  const registryAbsencePreflight = (
+    text.includes("Abort if any exact release version already exists")
+    && text.includes('"@prooftape/schema"')
+    && text.includes('"@prooftape/core"')
+    && text.includes('"@prooftape/hook"')
+    && text.includes('"prooftape"')
+    && text.includes("packument.versions?.[process.env.RELEASE_VERSION]")
   );
 
   const report = {
@@ -127,6 +137,8 @@ export function auditReleaseWorkflow(text, version) {
     oidcIsolatedToPublish,
     leastPrivilegePermissions,
     tokenless,
+    pinnedToolchain,
+    registryAbsencePreflight,
     provenancePublish,
     passed: (
       manualDispatch
@@ -142,7 +154,8 @@ export function auditReleaseWorkflow(text, version) {
       && tokenless
       && actionsPinned
       && provenancePublish
-      && npmFloor
+      && pinnedToolchain
+      && registryAbsencePreflight
     ),
   };
   const failures = [];
@@ -171,6 +184,9 @@ export function auditReleaseWorkflow(text, version) {
   if (!provenancePublish) {
     failures.push("release must publish all four tarballs in dependency order with provenance");
   }
-  if (!npmFloor) failures.push("release must require npm 11.5.1 or newer");
+  if (!pinnedToolchain) failures.push("release must pin Node 24.18.0 and npm 11.16.0");
+  if (!registryAbsencePreflight) {
+    failures.push("release must abort if any exact package version already exists");
+  }
   return { report, failures };
 }

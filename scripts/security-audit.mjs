@@ -6,6 +6,7 @@ import { auditNpmBootstrapWorkflow } from "./npm-bootstrap-workflow-policy.mjs";
 import { auditReleaseWorkflow } from "./release-workflow-policy.mjs";
 
 const root = process.cwd();
+const FIRST_PUBLICATION_VERSION = "0.1.0-alpha.1";
 const allowedLicenses = new Set(["Apache-2.0", "BSD-3-Clause", "ISC", "MIT"]);
 const secretPatterns = [
   ["AWS access key", /\bAKIA[0-9A-Z]{16}\b/gu],
@@ -129,7 +130,7 @@ for (const failure of releaseWorkflowAudit.failures) {
 }
 const npmBootstrapWorkflowAudit = auditNpmBootstrapWorkflow(
   npmBootstrapWorkflowText,
-  version,
+  FIRST_PUBLICATION_VERSION,
 );
 for (const failure of npmBootstrapWorkflowAudit.failures) {
   failures.push(`.github/workflows/npm-bootstrap.yml: ${failure}`);

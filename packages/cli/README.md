@@ -5,7 +5,7 @@ Observation authenticity is not established against code under test.
 ProofTape is a command-line tool that compares captured runtime behavior of one
 npm dependency across exact base and candidate Git revisions.
 
-This package is an early `0.1.0-alpha.1` release for Node.js 22.15 or newer.
+This package is an early `0.1.0-alpha.2` release for Node.js 22.15 or newer.
 
 ```bash
 npx prooftape compare \

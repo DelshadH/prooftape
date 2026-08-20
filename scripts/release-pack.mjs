@@ -20,7 +20,7 @@ import {
   resolve,
 } from "node:path";
 
-const VERSION = "0.1.0-alpha.1";
+const VERSION = "0.1.0-alpha.2";
 const PACKAGE_NAMES = [
   "@prooftape/schema",
   "@prooftape/core",

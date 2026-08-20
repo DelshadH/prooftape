@@ -4,12 +4,6 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
-    inputs:
-      npm_bootstrap_preflight:
-        description: Persist the token-free npm bootstrap preflight for this exact main commit
-        required: false
-        type: boolean
-        default: false
 permissions:
   contents: read
 jobs:
@@ -80,26 +74,8 @@ jobs:
         run: sha256sum --check SHA256SUMS
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: prooftape-0.1.0-alpha.1-rc-${{ github.event.pull_request.head.sha || github.sha }}
+          name: prooftape-0.1.0-alpha.2-rc-${{ github.event.pull_request.head.sha || github.sha }}
           path: .evidence/release
-          if-no-files-found: error
-          include-hidden-files: true
-          retention-days: 90
-          compression-level: 0
-      - if: ${{ github.event_name == 'workflow_dispatch' && inputs.npm_bootstrap_preflight }}
-        run: >-
-          node scripts/npm-bootstrap-verify.mjs preflight
-          --dir .evidence/release
-          --commit "${{ github.event.pull_request.head.sha || github.sha }}"
-          --out .evidence/npm-bootstrap-preflight.json
-          --replace
-      - if: ${{ github.event_name == 'workflow_dispatch' && inputs.npm_bootstrap_preflight }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: prooftape-0.1.0-alpha.1-npm-bootstrap-preflight-${{ github.sha }}
-          path: |
-            .evidence/release
-            .evidence/npm-bootstrap-preflight.json
           if-no-files-found: error
           include-hidden-files: true
           retention-days: 90

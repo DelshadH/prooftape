@@ -167,7 +167,7 @@ try {
   const help = run(process.execPath, [cli, "--help"], { cwd: install });
   if (!help.includes("prooftape compare")) throw new Error("packed CLI help smoke failed");
   const version = run(process.execPath, [cli, "--version"], { cwd: install });
-  if (version !== "0.1.0-alpha.1") throw new Error("packed CLI version smoke failed");
+  if (version !== "0.1.0-alpha.2") throw new Error("packed CLI version smoke failed");
 
   const fixture = join(temporary, "fixture");
   const dependency = join(fixture, "node_modules", "fixture");

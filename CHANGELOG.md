@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.1.0-alpha.2 - 2026-08-20
+
+- Updated the runtime parser dependency `acorn` from 8.17.0 to 8.18.0.
+- Updated the transitive development dependency `nanoid` from 3.3.16 to
+  3.3.18, resolving GHSA-2v37-7h3g-55p8 without changing runtime packages.
+- Preserved the public version 1 formats, exit codes, supported observation
+  surface, and explicit `observationAuthenticity: "not-established"` boundary.
+- Moved subsequent publication to the permanent tokenless npm trusted-publisher
+  workflow with exact-tag evidence, checksums, and provenance.
+
 ## 0.1.0-alpha.1 - 2026-07-31
 
 - Declared the capsule, report, and reproduction-manifest JSON shapes as the
