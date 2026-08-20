@@ -9,9 +9,9 @@ compares the results. It detects changed returns, errors, argument mutation,
 call presence, and relative order. When the captured values are safe to replay,
 it also writes an executable minimal reproduction.
 
-> **Status:** `0.1.0-alpha.1` is published on npm from reviewed commit
-> `16ff070e9cc0101c512849dac689a666abef0487` with registry signatures and
-> GitHub provenance. The supported JavaScript surface is deliberately narrow,
+> **Status:** `0.1.0-alpha.2` is the current npm prerelease, published from its
+> immutable reviewed tag with registry signatures and GitHub provenance. The
+> supported JavaScript surface is deliberately narrow,
 > the local runner is not a sandbox for hostile code, and observation
 > authenticity is not established against code under test.
 
@@ -160,10 +160,10 @@ Project decisions and review authority are documented in
 [GOVERNANCE.md](GOVERNANCE.md), the supported maintenance window in
 [SUPPORT.md](SUPPORT.md), and release operations in
 [RELEASING.md](RELEASING.md). All four npm names contain the exact reviewed
-`0.1.0-alpha.1` packages.
+`0.1.0-alpha.2` packages.
 The one-time bootstrap credential was revoked and removed from GitHub. Placeholder
-packages were never published. Permanent trusted-publisher configuration remains
-an owner account step before the next prerelease uses tokenless OIDC.
+packages were never published. Subsequent prereleases use the permanent tokenless
+OIDC trusted-publisher workflow.
 
 ## Security
 

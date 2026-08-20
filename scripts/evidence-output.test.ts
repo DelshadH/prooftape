@@ -45,7 +45,7 @@ describe("quality-gate evidence output", () => {
       /ref: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}/gu,
     )).toHaveLength(3);
     expect(workflow).toContain(
-      "name: prooftape-0.1.0-alpha.1-rc-${{ github.event.pull_request.head.sha || github.sha }}",
+      "name: prooftape-0.1.0-alpha.2-rc-${{ github.event.pull_request.head.sha || github.sha }}",
     );
     const reusableWorkflow = await readFile(
       resolve(repository, ".github/workflows/prooftape.yml"),
@@ -69,27 +69,14 @@ describe("quality-gate evidence output", () => {
     }
   });
 
-  it("can persist an exact-main token-free npm bootstrap preflight", async () => {
+  it("does not retain the consumed first-publication preflight in ordinary CI", async () => {
     const workflow = await readFile(
       resolve(repository, ".github/workflows/ci.yml"),
       "utf8",
     );
     expect(workflow).toContain("workflow_dispatch:");
-    expect(workflow).toContain("npm_bootstrap_preflight:");
-    expect(workflow).toContain('node-version: "24.18.0"');
-    expect(workflow).toContain('npm install --global "npm@11.16.0"');
-    expect(workflow).toContain(
-      "node scripts/npm-bootstrap-verify.mjs preflight",
-    );
-    expect(workflow).toContain(
-      "--commit \"${{ github.event.pull_request.head.sha || github.sha }}\"",
-    );
-    expect(workflow).toContain(
-      "name: prooftape-0.1.0-alpha.1-npm-bootstrap-preflight-${{ github.sha }}",
-    );
-    expect(workflow).toContain(
-      "path: |\n            .evidence/release\n            .evidence/npm-bootstrap-preflight.json",
-    );
+    expect(workflow).not.toContain("npm_bootstrap_preflight:");
+    expect(workflow).not.toContain("npm-bootstrap-verify.mjs preflight");
   });
 
   it("requires a protected tokenless OIDC release workflow", async () => {
@@ -99,18 +86,20 @@ describe("quality-gate evidence output", () => {
     const report = JSON.parse(await readFile(outputPath, "utf8"));
     expect(report.releaseWorkflow).toEqual({
       path: ".github/workflows/release.yml",
-      version: "0.1.0-alpha.1",
+      version: "0.1.0-alpha.2",
       manualDispatch: true,
       contentsRead: true,
       oidc: true,
       protectedEnvironment: "npm-release",
-      exactTag: "v0.1.0-alpha.1",
+      exactTag: "v0.1.0-alpha.2",
       tagBoundRun: true,
       reviewableEvidenceBeforePublish: true,
       hiddenReleaseEvidence: true,
       oidcIsolatedToPublish: true,
       leastPrivilegePermissions: true,
       tokenless: true,
+      pinnedToolchain: true,
+      registryAbsencePreflight: true,
       provenancePublish: true,
       passed: true,
     });
@@ -133,7 +122,7 @@ describe("quality-gate evidence output", () => {
       resolve(repository, ".github/workflows/release.yml"),
       "utf8",
     );
-    expect(auditReleaseWorkflow(workflow, "0.1.0-alpha.1").report.passed)
+    expect(auditReleaseWorkflow(workflow, "0.1.0-alpha.2").report.passed)
       .toBe(true);
 
     const weakened = [
@@ -143,9 +132,15 @@ describe("quality-gate evidence output", () => {
         "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
         "actions/checkout@v7",
       ),
+      workflow.replace('node-version: "24.18.0"', 'node-version: "24"'),
+      workflow.replace('npm install --global "npm@11.16.0"', "npm --version"),
       workflow.replace(
-        "default: v0.1.0-alpha.1",
+        "packument.versions?.[process.env.RELEASE_VERSION]",
+        "false",
+      ),
+      workflow.replace(
         "default: v0.1.0-alpha.2",
+        "default: v0.1.0-alpha.1",
       ),
       workflow.replace("ref: ${{ inputs.tag }}", "ref: main"),
       workflow.replace(
@@ -172,7 +167,7 @@ describe("quality-gate evidence output", () => {
       ),
     ];
     for (const candidate of weakened) {
-      expect(auditReleaseWorkflow(candidate, "0.1.0-alpha.1").report.passed)
+      expect(auditReleaseWorkflow(candidate, "0.1.0-alpha.2").report.passed)
         .toBe(false);
     }
 

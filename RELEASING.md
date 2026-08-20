@@ -175,6 +175,33 @@ Do not run `release.yml` for `0.1.0-alpha.1`; npm versions are immutable and the
 bootstrap already consumed it. Begin the permanent OIDC workflow with the next
 independently reviewed prerelease.
 
+## Permanent OIDC prereleases
+
+For every version after `0.1.0-alpha.1`:
+
+1. choose the next coherent prerelease version for all four packages and exact
+   internal dependencies;
+2. update the permanent release workflow, CLI version, package smoke, release
+   preparation, changelog, and release notes together;
+3. run every documented gate from a clean install, then require exact-head CI
+   and independent AI review on a focused pull request;
+4. merge without changing the reviewed tree, restrict `npm-release` to the exact
+   new tag, and protect that tag from update or deletion;
+5. create the immutable annotated tag at the verified main commit and dispatch
+   `release.yml` from that tag with the same exact tag input;
+6. after tokenless publication succeeds, download the same-run release evidence,
+   verify its file set and checksums, compare registry tarballs and integrity
+   fields, run npm signature and provenance verification, and confirm the
+   `alpha` dist-tag for all four packages; and
+7. create the GitHub prerelease from the verified evidence and release-notes
+   file, then confirm the release assets and a clean main checkout.
+
+If the protected environment rejects the tag or npm trusted publishing fails,
+do not publish from a workstation or add a token. Correct the environment or
+trusted-publisher configuration and rerun only if no package in the version set
+was published. Any partial publication is an incident and must follow the
+compromise procedure.
+
 ## Correction, deprecation, and rollback
 
 A bad npm version cannot be replaced. Stop the workflow, deprecate every

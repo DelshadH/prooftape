@@ -69,7 +69,7 @@ describe("runCli", () => {
     expect(await runCli(["--version"], { cwd: process.cwd(), ...version.io }))
       .toBe(0);
     expect(version.read()).toEqual({
-      stdout: "0.1.0-alpha.1\n",
+      stdout: "0.1.0-alpha.2\n",
       stderr: "",
     });
   });

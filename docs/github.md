@@ -88,16 +88,17 @@ That environment must:
 2. contain no npm token or other secret;
 3. grant `id-token: write` only to the publish job.
 
-These GitHub-side controls were read back on 2026-07-26: the only permitted
-deployment ref is tag `v0.1.0-alpha.1`, and the environment has zero secrets,
+The first-release controls were read back on 2026-07-26 with only
+`v0.1.0-alpha.1` permitted. For the next owner-authorized publication the
+environment is restricted to exact tag `v0.1.0-alpha.2`; it has zero secrets,
 zero variables, and no human-review rule. `main` requires an up-to-date pull
 request, the three documented CI checks, conversation resolution, and
 administrator enforcement, with a human approval count of zero; force pushes
-and deletion are disabled. A no-bypass tag ruleset prevents update or deletion
-of `v0.1.0-alpha.1` after its owner-authorized creation.
+and deletion are disabled. No-bypass tag rulesets prevent update or deletion
+of each owner-authorized release tag after creation.
 
 The manual release workflow binds both the run and checkout to the exact
-`v0.1.0-alpha.1` tag. Its read-only preparation job rebuilds and uploads all
+`v0.1.0-alpha.2` tag. Its read-only preparation job rebuilds and uploads all
 evidence before approval. The protected publish job alone receives
 `id-token: write`; it downloads the same-run artifact, verifies its exact file
 set, tagged commit, version, and tarball checksums, rejects older npm clients

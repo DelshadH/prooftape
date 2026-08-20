@@ -2,7 +2,7 @@
 
 The bounded Node.js module interception hook used by ProofTape recording.
 
-This package is an early `0.1.0-alpha.1` release for Node.js 22.15 or newer. It
+This package is an early `0.1.0-alpha.2` release for Node.js 22.15 or newer. It
 is installed by the `prooftape` CLI and is not a standalone sandbox or an
 observation attestation mechanism.
 

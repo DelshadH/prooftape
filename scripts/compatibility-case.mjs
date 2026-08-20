@@ -47,7 +47,7 @@ function capsule(commit, callOrCalls, issues = []) {
         version: commit === "a" ? "1.0.0" : "2.0.0",
         entry: "node_modules/fixture/index.js",
       },
-      prooftapeVersion: "0.1.0-alpha.1",
+      prooftapeVersion: "0.1.0-alpha.2",
       configurationSha256: "c".repeat(64),
       observationAuthenticity: "not-established",
     },

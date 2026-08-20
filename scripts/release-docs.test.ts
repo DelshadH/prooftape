@@ -11,12 +11,19 @@ describe("release documentation", () => {
       "utf8",
     );
     const changelog = await readFile(resolve(repository, "CHANGELOG.md"), "utf8");
+    const currentNotes = await readFile(
+      resolve(repository, "docs/release-notes-0.1.0-alpha.2.md"),
+      "utf8",
+    );
 
     expect(notes).toContain("`0.1.0-alpha.1` is published");
     expect(notes).toContain("both `alpha` and `latest`");
     expect(notes).not.toContain("prospective release candidate");
     expect(notes).not.toContain("REGISTRY AUTHENTICATION UNAVAILABLE");
     expect(changelog).toContain("## 0.1.0-alpha.1 - 2026-07-31");
+    expect(changelog).toContain("## 0.1.0-alpha.2 - 2026-08-20");
+    expect(currentNotes).toContain("Observation authenticity is not established");
+    expect(currentNotes).toContain("`alpha` dist-tag");
     expect(changelog).not.toContain("unpublished release candidate");
     expect(changelog).not.toContain("uploaded before approval");
   });
