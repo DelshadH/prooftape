@@ -86,7 +86,7 @@ jobs:
           git fetch --no-tags origin main:refs/remotes/origin/main
           git merge-base --is-ancestor "${PROOFTAPE_EXPECTED_COMMIT}" refs/remotes/origin/main
       - name: Set up Node without a registry credential
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "24.18.0"
           package-manager-cache: false
@@ -164,7 +164,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "${PROOFTAPE_EXPECTED_COMMIT}"
           test "$(git rev-list -n 1 "${PROOFTAPE_RELEASE_TAG}")" = "${PROOFTAPE_EXPECTED_COMMIT}"
       - name: Set up Node and the npm registry
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "24.18.0"
           registry-url: https://registry.npmjs.org
@@ -347,7 +347,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "${PROOFTAPE_EXPECTED_COMMIT}"
           test "$(git rev-list -n 1 "${PROOFTAPE_RELEASE_TAG}")" = "${PROOFTAPE_EXPECTED_COMMIT}"
       - name: Set up the exact release Node version
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "24.18.0"
           package-manager-cache: false
