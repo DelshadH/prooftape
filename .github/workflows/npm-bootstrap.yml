@@ -174,7 +174,7 @@ jobs:
           npm install --global "npm@${NPM_VERSION}"
           test "$(npm --version)" = "${NPM_VERSION}"
       - name: Download the same-run reviewed evidence
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: prooftape-0.1.0-alpha.1-npm-bootstrap-evidence
           path: .evidence
@@ -356,12 +356,12 @@ jobs:
           npm install --global "npm@${NPM_VERSION}"
           test "$(npm --version)" = "${NPM_VERSION}"
       - name: Download the same-run reviewed evidence
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: prooftape-0.1.0-alpha.1-npm-bootstrap-evidence
           path: .evidence
       - name: Download verified registry and provenance evidence
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: prooftape-0.1.0-alpha.1-npm-publication-verification
           path: .evidence
