@@ -126,7 +126,7 @@ jobs:
             --out .evidence/npm-bootstrap-preflight.json \
             --replace
       - name: Upload dry-run and exact release evidence
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: prooftape-0.1.0-alpha.1-npm-bootstrap-evidence
           path: |
@@ -275,7 +275,7 @@ jobs:
           npm audit signatures
       - name: Upload registry verification
         id: publication_verification_artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: prooftape-0.1.0-alpha.1-npm-publication-verification
           path: .evidence/npm-bootstrap-publication-verification.json
@@ -315,7 +315,7 @@ jobs:
               || steps.postpublish_incident.outcome == 'success'
             )
           }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: prooftape-0.1.0-alpha.1-npm-bootstrap-incident
           path: .evidence/npm-bootstrap-incident.json
@@ -418,7 +418,7 @@ jobs:
             --replace
       - name: Preserve GitHub prerelease incident evidence
         if: ${{ always() && steps.github_release_incident.outcome == 'success' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: prooftape-0.1.0-alpha.1-github-release-incident
           path: .evidence/npm-bootstrap-incident.json
